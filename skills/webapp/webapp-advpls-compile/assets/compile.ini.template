@@ -1,0 +1,32 @@
+; webapp-advpls-compile - template de script TDS-CLI (advpls cli compile.ini)
+; Encoding: CP1252/ANSI. NAO use UTF-8.
+; Uso:
+;   1) copie este arquivo para  tmp/advpls/compile.ini  (tmp/ esta no .gitignore;
+;      a copia com senha NAO vai para o git)
+;   2) substitua todos os <<...>> abaixo
+;   3) rode o wrapper:  compile.ps1 (Windows)  ou  compile.sh (macOS/Linux)
+;
+; Caminhos usam barra normal "/" (funciona em Win/mac/Linux). Use caminho ABSOLUTO.
+
+logToFile=<<CAMINHO/ABS/tmp/advpls/tds-compile.log>>
+showConsoleOutput=true
+
+[authentication]
+action=authentication
+server=<<ADDRESS>>
+port=<<PORT>>
+secure=0
+build=AUTO
+environment=<<ENVIRONMENT>>
+user=<<USER>>
+psw=<<PASSWORD>>
+
+; [authorization]      ; descomente SO se algum fonte tiver Function/Main Function
+; action=authorization
+; authtoken=<<CHAVE_DE_COMPILACAO>>
+
+[compile]
+action=compile
+program=<<CAMINHO/ABS/fonte1.tlpp>>;<<CAMINHO/ABS/fonte2.tlpp>>
+recompile=T
+includes=<<INCLUDES_DIR>>

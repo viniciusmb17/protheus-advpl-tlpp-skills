@@ -1,0 +1,34 @@
+; webapp-advpls-compile - PERFIL de compilacao (SEM senha). Encoding CP1252/ANSI.
+;
+; A senha NAO fica neste arquivo. Ela vem do cofre do SO:
+;   Windows -> set-secret.ps1  (DPAPI, cifrado por usuario+maquina)
+;   macOS   -> set-secret.sh   (Keychain)
+;   Linux   -> set-secret.sh   (libsecret/secret-tool)
+; O wrapper substitui o marcador __PSW__ pela senha em runtime, num .ini
+; TRANSIENTE no temp do SO, que e apagado logo apos compilar.
+;
+; Uso:
+;   1) copie para  tmp/advpls/compile.profile.ini  e ajuste os <<...>>
+;   2) guarde a senha uma vez:  set-secret.ps1 -SecretName default   (ou set-secret.sh default)
+;   3) compile:  compile.ps1            (ou  ./compile.sh)
+;
+; Caminhos com "/" (Win/mac/Linux). Use caminho ABSOLUTO.
+
+logToFile=<<CAMINHO/ABS/tmp/advpls/tds-compile.log>>
+showConsoleOutput=true
+
+[authentication]
+action=authentication
+server=<<ADDRESS>>
+port=<<PORT>>
+secure=0
+build=AUTO
+environment=<<ENVIRONMENT>>
+user=<<USER>>
+psw=__PSW__
+
+[compile]
+action=compile
+program=<<CAMINHO/ABS/fonte1.tlpp>>;<<CAMINHO/ABS/fonte2.tlpp>>
+recompile=T
+includes=<<INCLUDES_DIR>>
