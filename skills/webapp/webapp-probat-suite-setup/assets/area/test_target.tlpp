@@ -1,0 +1,157 @@
+#include 'tlpp-core.th'
+#include 'tlpp-probat.th'
+#include 'topconn.ch'
+
+namespace test.<area>
+using namespace tlpp.probat
+
+#define _EMP_ "<emp>"
+#define _FIL_ "<fil>"
+
+@TestFixture(suite="<area>_<suite>")
+class test_<target>
+  private data cEmp as character
+  private data cFil as character
+  public  method new() constructor
+  @OneTimeSetUp()
+  public method prepara()
+  @OneTimeTearDown()
+  public method encerra()
+  @Test('status open traz apenas C1_QUJE zero')
+  public method test01_open()
+  @Test('status partial traz C1_QUJE parcial')
+  public method test02_partial()
+  @Test('status fulfilled traz C1_QUJE igual QUANT')
+  public method test03_fulfilled()
+  @Test('sem branch retorna varias filiais')
+  public method test04_multibranch()
+  @Test('branch filtra por filial')
+  public method test05_branchfilter()
+  @Test('startDate e endDate filtram C1_EMISSAO')
+  public method test06_datefilter()
+  @Test('product LIKE filtra produto')
+  public method test07_productfilter()
+  @Test('shape branch requestNumber productCode')
+  public method test08_shape()
+  @Test('validateProductGroup true filtra C1_GRUPCOM')
+  public method test09_groupvalidation()
+  @Test('orderBy no formato CAMPO.desc retorna 200')
+  public method test10_orderby()
+endclass
+
+method new() class test_<target>
+return self
+
+method prepara() class test_<target>
+  ::cEmp := test.<area>.u_<area>TestCfg("emp", _EMP_)
+  ::cFil := test.<area>.u_<area>TestCfg("fil", _FIL_)
+  RpcSetEnv(::cEmp, ::cFil, , , "<mod>")
+return .T.
+
+method encerra() class test_<target>
+  RpcClearEnv()
+return .T.
+
+method test01_open() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'open'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "deve retornar 200: " + jResp['message'])
+  assertTrue(jResp:hasProperty('items'), "deve ter items")
+  assertTrue(jResp:hasProperty('count'), "deve ter count")
+return .T.
+
+method test02_partial() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'partial'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "deve retornar 200 para partial")
+return .T.
+
+method test03_fulfilled() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'fulfilled'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "deve retornar 200 para fulfilled")
+return .T.
+
+method test04_multibranch() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'open'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "sem branch deve listar todas filiais")
+return .T.
+
+method test05_branchfilter() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'open'
+  jParams['branch'] := ::cFil
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "branch deve filtrar por filial")
+return .T.
+
+method test06_datefilter() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'open'
+  jParams['startDate'] := '2026-01-01'
+  jParams['endDate']   := '2026-12-31'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "periodo deve filtrar C1_EMISSAO")
+return .T.
+
+method test07_productfilter() class test_<target>
+  local jParams  := JsonObject():New() as json
+  local jResp    := nil                as json
+  local cProduct := test.<area>.u_<area>TestCfg("product", "") as character
+  If Empty(cProduct)
+    assertOK("SKIP: informe product no runner U_runTest<Area>")
+    Return .T.
+  EndIf
+  jParams['status']  := 'open'
+  jParams['product'] := cProduct
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "product LIKE deve filtrar")
+return .T.
+
+method test08_shape() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  local jItem   := nil                as json
+  jParams['status'] := 'open'
+  jParams['limit']  := '1'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "deve retornar 200")
+  assertTrue(jResp:hasProperty('statusCount'), "deve ter statusCount")
+  assertTrue(jResp:hasProperty('branchCount'), "deve ter branchCount")
+  If jResp['count'] > 0
+    jItem := jResp['items'][1]
+    assertTrue(jItem:hasProperty('branch'), "deve ter branch")
+    assertTrue(jItem:hasProperty('requestNumber'), "deve ter requestNumber")
+    assertTrue(jItem:hasProperty('productCode'), "deve ter productCode")
+    assertTrue(jItem:hasProperty('recno'), "deve ter recno")
+  EndIf
+return .T.
+
+method test09_groupvalidation() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status'] := 'open'
+  jParams['validateProductGroup'] := 'true'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "validateProductGroup deve retornar 200")
+return .T.
+
+method test10_orderby() class test_<target>
+  local jParams := JsonObject():New() as json
+  local jResp   := nil                as json
+  jParams['status']  := 'open'
+  jParams['orderBy'] := 'C1_EMISSAO.desc'
+  jResp := <target-ns>.u_<target>(jParams)
+  assertEquals(jResp['code'], '200', "orderBy CAMPO.desc deve retornar 200: " + jResp['message'])
+return .T.

@@ -1,0 +1,139 @@
+#include 'tlpp-core.th'
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+// ============================================================================
+// Runner dos testes ProBat de <area>. Mesmo padrao do CCM (runTestCotacao):
+// config em RUNTIME via parametros OU ParamBox; o runner grava num arquivo
+// compartilhado (u_<area>TestCfgSet) que os fixtures leem (u_<area>TestCfg) -
+// ProBat roda os testes em outra thread, entao Private nao alcanca; arquivo e
+// cross-thread. Sem valor, os testes caem no #define/cfgDefault de fallback.
+//
+// Como rodar (SmartClient "Programa inicial" ou console TDS):
+//   U_runTest<Area>()                                 // ABRE a caixa ParamBox
+//   U_runTest<Area>("0101","000003")                  // direto: filial + produto
+//   U_runTest<Area>(,,,,"<emp>","<fil>")                    // troca empresa/filial
+// ============================================================================
+
+// Suites desta pasta.
+Static Function groupSuites() as array
+Return {"<area>_<suite>"}  // adicione mais suites desta area
+
+/*/{Protheus.doc} askParams
+Abre a caixa ParamBox para coletar a config dos testes. Prefill com a ultima escolha
+salva (probat_<area>_cfg.json); 1a vez cai nos defaults. Preenche por referencia
+cBranch/cProduct/cSupplier/cRequest/cEmp/cFil. Retorna .F. se o usuario cancelar.
+@type function
+@author <author>
+@since 23/06/2026
+@return logical, .T. confirmado / .F. cancelado
+/*/
+Static Function askParams(cBranch, cProduct, cSupplier, cRequest, cEmp, cFil)
+    Local aPB     := {}    as array
+    Local aRet    := {}    as array
+    Local lOk     := .F.   as logical
+    // Prefill com a ultima escolha salva. 1a vez -> defaults (cfgDefault p/ emp/fil).
+    Local cLastBr := test.<area>.u_<area>TestCfg("branch",   "") as character
+    Local cLastPr := test.<area>.u_<area>TestCfg("product",  "") as character
+    Local cLastSu := test.<area>.u_<area>TestCfg("supplier", "") as character
+    Local cLastRq := test.<area>.u_<area>TestCfg("request",  "") as character
+    Local cLastEm := test.<area>.u_<area>TestCfg("emp")          as character
+    Local cLastFi := test.<area>.u_<area>TestCfg("fil")          as character
+
+    aAdd(aPB, {1, "Filial",      PadR(cLastBr, 4),  "@!", "", "", "", 40, .F.})
+    aAdd(aPB, {1, "Produto",     PadR(cLastPr, 15), "@!", "", "", "", 80, .F.})
+    aAdd(aPB, {1, "Fornecedor",  PadR(cLastSu, 6),  "@!", "", "", "", 50, .F.})
+    aAdd(aPB, {1, "Solicitacao", PadR(cLastRq, 6),  "@!", "", "", "", 50, .F.})
+    aAdd(aPB, {1, "Empresa",     PadR(cLastEm, 2),  "@!", "", "", "", 40, .F.})
+    aAdd(aPB, {1, "Filial Trab", PadR(cLastFi, 6),  "@!", "", "", "", 60, .F.})
+
+    lOk := ParamBox(aPB, "Testes ProBat - <area>", @aRet)
+    If lOk
+        cBranch   := AllTrim(aRet[1]) ; cProduct := AllTrim(aRet[2])
+        cSupplier := AllTrim(aRet[3]) ; cRequest := AllTrim(aRet[4])
+        cEmp      := AllTrim(aRet[5]) ; cFil     := AllTrim(aRet[6])
+    EndIf
+Return lOk
+
+/*/{Protheus.doc} runTest<Area>
+Dispara o ProBat para as suites de <area>, gravando a config (branch/product/supplier/
+request/emp/fil) em arquivo compartilhado para os fixtures lerem em runtime. Sem parametros
+e com interface, abre a caixa ParamBox. Declarado sem prefixo u_/U_ (publica U_RUNTEST<AREA>);
+chame como U_runTest<Area>().
+@type function
+@author <author>
+@since 23/06/2026
+@param cBranch, character, filial para filtro
+@param cProduct, character, codigo do produto de teste
+@param cSupplier, character, codigo/nome do fornecedor de teste
+@param cRequest, character, numero da solicitacao de compra
+@param cEmp, character, empresa (default: cfgDefault / ultima salva)
+@param cFil, character, filial de trabalho (default: cfgDefault / ultima salva)
+@return logical, .T. quando executou; .F. se PROBAT ausente ou caixa cancelada
+/*/
+User Function runTest<Area>(cBranch, cProduct, cSupplier, cRequest, cEmp, cFil) as logical
+    Local cKey    := "<AREA>-" + StrTran(Time(), ":", "-") as character
+    Local jModule := nil                                    as json
+    Local aRun    := {}                                     as array
+    Local nR      := 0                                      as numeric
+    Local cEmpUi  := ""                                     as character
+    Local cFilUi  := ""                                     as character
+    Local lOk     := .F.                                    as logical
+    Local jCfg    := JsonObject():New()                     as json
+
+    Default cBranch   := ""
+    Default cProduct  := ""
+    Default cSupplier := ""
+    Default cRequest  := ""
+    Default cEmp      := ""
+    Default cFil      := ""
+
+    // Com interface: prepara ambiente (ParamBox precisa de xFilial/cFilAnt), abre a caixa
+    // e limpa o env antes do ProBat (os testes gerenciam o proprio env). emp/fil: parametro > config.
+    If !IsBlind()
+        cEmpUi := cEmp
+        If Empty(cEmpUi)
+            cEmpUi := test.<area>.u_<area>TestCfg("emp")
+        EndIf
+        cFilUi := cFil
+        If Empty(cFilUi)
+            cFilUi := test.<area>.u_<area>TestCfg("fil")
+        EndIf
+        RpcSetEnv(cEmpUi, cFilUi, , , "<mod>")
+
+        If Empty(cBranch) .And. Empty(cProduct) .And. Empty(cSupplier) .And. Empty(cRequest)
+            lOk := askParams(@cBranch, @cProduct, @cSupplier, @cRequest, @cEmp, @cFil)
+            If !lOk
+                RpcClearEnv()
+                Return .F.
+            EndIf
+        EndIf
+
+        RpcClearEnv()
+    EndIf
+
+    // Grava a config no arquivo compartilhado (cross-thread).
+    jCfg['emp']      := cEmp
+    jCfg['fil']      := cFil
+    jCfg['branch']   := cBranch
+    jCfg['product']  := cProduct
+    jCfg['supplier'] := cSupplier
+    jCfg['request']  := cRequest
+    test.<area>.u_<area>TestCfgSet(jCfg)
+
+    aRun := groupSuites()
+    If !tlpp.module('PROBAT', @jModule)
+        FWLogMsg("ERROR", , "runTest<Area>", FunName(), "", "0", "PROBAT nao instalado no ambiente", 0, 0)
+        Return .F.
+    EndIf
+
+    tlpp.probat.discovery()                                // assincrono: descobre os @TestFixture
+    Sleep(1500)
+    For nR := 1 To Len(aRun)
+        tlpp.probat.runOffCoverage("type:suite", aRun[nR], "custom:" + cKey)
+        Sleep(2000)
+    Next nR
+    tlpp.probat.export("type:custom", cKey)
+    test.common.u_stampResults(cKey, , jCfg)
+    FWLogMsg("INFO", , "runTest<Area>", FunName(), "", "0", "ProBat <area> finalizado (key " + cKey + ")", 0, 0)
+Return .T.

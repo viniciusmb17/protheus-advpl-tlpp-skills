@@ -1,0 +1,41 @@
+#include 'tlpp-core.th'
+#include 'totvs.ch'
+
+// ============================================================================
+// Runner ProBat da area '<area>'. Testes puros (sem env/branch). Mesmo fluxo
+// dos demais: discovery -> run por suite -> export -> stamp (renomeia o XML).
+//   U_runTest<Area>()   // SmartClient "Programa inicial" ou console TDS
+// ============================================================================
+
+Static Function groupSuites() as array
+Return {"<area>_<suite>"}
+
+/*/{Protheus.doc} runTest<Area>
+Dispara o ProBat para as suites da area <area> e carimba o XML exportado.
+@type function
+@author <author>
+@since 24/06/2026
+@return logical, .T. quando executou; .F. se PROBAT ausente
+/*/
+User Function runTest<Area>() as logical
+    Local cKey    := "<AREA>-" + StrTran(Time(), ":", "-") as character
+    Local jModule := nil                                   as json
+    Local aRun    := {}                                    as array
+    Local nR      := 0                                     as numeric
+
+    aRun := groupSuites()
+    If !tlpp.module('PROBAT', @jModule)
+        FWLogMsg("ERROR", , "runTest<Area>", FunName(), "", "0", "PROBAT nao instalado no ambiente", 0, 0)
+        Return .F.
+    EndIf
+
+    tlpp.probat.discovery()
+    Sleep(1500)
+    For nR := 1 To Len(aRun)
+        tlpp.probat.runOffCoverage("type:suite", aRun[nR], "custom:" + cKey)
+        Sleep(2000)
+    Next nR
+    tlpp.probat.export("type:custom", cKey)
+    test.common.u_stampResults(cKey)
+    FWLogMsg("INFO", , "runTest<Area>", FunName(), "", "0", "ProBat <area> finalizado (key " + cKey + ")", 0, 0)
+Return .T.

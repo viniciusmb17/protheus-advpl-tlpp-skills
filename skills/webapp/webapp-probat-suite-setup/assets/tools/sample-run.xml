@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<testsuites name="tlppCore_tests" tests="3" ok="2" failures="1" skipped="0" date="24/06/26" time="23:58:42">
+  <exec code="A" custom="SAMPLE-X" time="0.25" ended="1781728305.35">
+    <inputParameters><param1>type:custom</param1><param2>SAMPLE-X</param2></inputParameters>
+    <info_server><so>Win</so><AppServerVersion>24.3.1.5</AppServerVersion><TLPPVersion>01.06.01</TLPPVersion></info_server>
+    <iniconfiguration><DBTYPE>Local</DBTYPE><EXPORT_FORMAT>JUnit</EXPORT_FORMAT></iniconfiguration>
+  </exec>
+  <testsuite exec="A" proc="000064" custom="SAMPLE-X" name="area_um" tests="1" ok="1" failures="0" skipped="0" time="0.1" ended="1781728305.35">
+    <testcase classname="TEST.AREA.UM" name="Method:T01()" time="0"><system-out>Folder: T | Assert: OK | Result: {L}-[True] | Expected: {L}-[True] | Description: ok1</system-out></testcase>
+  </testsuite>
+  <exec code="B" custom="SAMPLE-X" time="0.30" ended="1781728308.01"><info_server><so>Win</so></info_server></exec>
+  <testsuite exec="B" proc="000065" custom="SAMPLE-X" name="area_dois" tests="2" ok="1" failures="1" skipped="0" time="0.2" ended="1781728308.01">
+    <testcase classname="TEST.AREA.DOIS" name="Method:T02()" time="0"><system-out>Folder: T | Assert: EQUALS | Result: {C}-[1] | Expected: {C}-[1] | Description: ok2</system-out></testcase>
+    <testcase classname="TEST.AREA.DOIS" name="Method:T03()" time="0"><failure type="Warning" message="diff"><system-out>Folder: T | Assert: EQUALS | Result: {C}-[2] | Expected: {C}-[3] | Description: falhou</system-out></failure></testcase>
+  </testsuite>
+  <runParameters description="runner config passed to the test run"><branch>0101</branch><product>000003</product><emp>99</emp><fil>01</fil></runParameters>
+</testsuites>

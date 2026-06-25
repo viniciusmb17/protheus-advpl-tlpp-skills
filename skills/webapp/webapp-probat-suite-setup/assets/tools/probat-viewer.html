@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProBat Viewer — Resultados de testes</title>
+<style>
+/* ============================================================================
+   ProBat Viewer — visualizador de resultados JUnit do motor ProBat (tlppCore).
+   Console de engenharia: tema escuro, acentos mono, cores semanticas de status.
+   Standalone, zero dependencia, funciona offline (file://).
+   ============================================================================ */
+
+:root {
+  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --r: 10px;
+  --r-sm: 7px;
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --speed: .28s;
+}
+
+html[data-theme="dark"] {
+  --bg: #0a0c10;
+  --bg-grid: rgba(255,255,255,.018);
+  --surface: #12151c;
+  --surface-2: #181c25;
+  --surface-3: #1f2530;
+  --border: #262c38;
+  --border-strong: #333b49;
+  --text: #e7ebf2;
+  --text-2: #aab3c2;
+  --muted: #6f7889;
+  --accent: #38bdf8;
+  --accent-ink: #07171f;
+  --accent-soft: rgba(56,189,248,.12);
+  --pass: #34d399;   --pass-soft: rgba(52,211,153,.13);
+  --fail: #fb6f8d;   --fail-soft: rgba(251,111,141,.13);
+  --error: #fb923c;  --error-soft: rgba(251,146,60,.13);
+  --skip: #fbbf24;   --skip-soft: rgba(251,191,36,.12);
+  --shadow: 0 14px 40px -18px rgba(0,0,0,.75);
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+html[data-theme="light"] {
+  --bg: #eef1f5;
+  --bg-grid: rgba(15,23,42,.025);
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --surface-3: #eef1f6;
+  --border: #e2e7ee;
+  --border-strong: #cdd5e0;
+  --text: #131a26;
+  --text-2: #41506a;
+  --muted: #7b8699;
+  --accent: #0e7fb8;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(14,127,184,.10);
+  --pass: #0e9f6e;   --pass-soft: rgba(14,159,110,.11);
+  --fail: #e02954;   --fail-soft: rgba(224,41,84,.10);
+  --error: #d9730a;  --error-soft: rgba(217,115,10,.11);
+  --skip: #b7791f;   --skip-soft: rgba(183,121,31,.12);
+  --shadow: 0 16px 40px -22px rgba(15,23,42,.35);
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 100% -10%, var(--accent-soft), transparent 60%),
+    linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0 / 100% 28px,
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0 / 28px 100%,
+    var(--bg);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; color: inherit; cursor: pointer; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+:focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-sm); }
+
+.app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "top top" "side main";
+  height: 100vh;
+}
+
+/* ---------- Topbar ---------- */
+.top {
+  grid-area: top;
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 18px; height: 58px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 30;
+}
+.brand { display: flex; align-items: center; gap: 11px; font-family: var(--font-mono); letter-spacing: .02em; }
+.brand .mark {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  background: linear-gradient(150deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--pass)));
+  color: var(--accent-ink); box-shadow: 0 6px 18px -8px var(--accent);
+}
+.brand .mark svg { width: 17px; height: 17px; }
+.brand b { font-weight: 700; }
+.brand .slash { color: var(--accent); }
+.brand .sub { color: var(--muted); font-weight: 500; }
+.top .spacer { flex: 1; }
+.tag {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-2);
+  padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 13px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+  color: var(--text); font-size: 13px; font-weight: 600;
+  transition: background var(--speed) var(--ease), border-color var(--speed) var(--ease), transform .1s var(--ease);
+}
+.btn:hover { background: var(--surface-3); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 15px; height: 15px; opacity: .9; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.icon { width: 34px; padding: 0; justify-content: center; }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: var(--surface-2); border-color: var(--border); }
+.btn[disabled] { opacity: .4; cursor: not-allowed; }
+
+/* ---------- Sidebar ---------- */
+.side {
+  grid-area: side;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.side-head { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
+.side-title { display: flex; align-items: center; justify-content: space-between; }
+.side-title h2 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.count-pill { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+.search {
+  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface);
+}
+.search:focus-within { border-color: var(--accent); }
+.search svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
+.search input { border: 0; background: transparent; color: var(--text); width: 100%; outline: none; font-size: 13px; }
+.search input::placeholder { color: var(--muted); }
+
+.sort-row { display: flex; align-items: center; gap: 8px; }
+.sort-row .sort-lab { font-size: 10.5px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; flex: none; }
+.sort-sel {
+  flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: 12.5px; cursor: pointer; outline: none;
+  transition: border-color var(--speed) var(--ease);
+}
+.sort-sel:hover { border-color: var(--border-strong); }
+.sort-sel:focus-visible { border-color: var(--accent); box-shadow: none; }
+.sort-dir { width: 32px; height: 32px; flex: none; border: 1px solid var(--border); background: var(--surface); }
+.sort-dir:hover { border-color: var(--accent); background: var(--surface-2); }
+.sort-dir svg { transition: transform var(--speed) var(--ease); }
+.sort-dir.asc svg { transform: rotate(180deg); }
+
+.runs { list-style: none; margin: 0; padding: 6px 8px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+.run {
+  position: relative; width: 100%; text-align: left;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  padding: 11px 12px 11px 14px; margin-bottom: 6px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease), transform .12s var(--ease);
+}
+.run::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+  border-radius: 3px; background: var(--st-color, var(--muted)); opacity: .85;
+}
+.run:hover { border-color: var(--border-strong); transform: translateX(2px); }
+.run.active { border-color: var(--accent); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--accent); }
+.run .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--st-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-color) 22%, transparent); }
+.run .meta { min-width: 0; }
+.run .key { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run .when { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run .bar { grid-column: 1 / -1; height: 4px; border-radius: 3px; background: var(--surface); overflow: hidden; display: flex; }
+.run .bar i { height: 100%; display: block; }
+.run .rm { display: flex; align-items: center; gap: 6px; }
+.run .badge {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  color: var(--st-color); background: var(--st-soft); white-space: nowrap;
+}
+.run .rm-x {
+  width: 22px; height: 22px; border-radius: 6px; border: 0; background: transparent; color: var(--muted);
+  display: grid; place-items: center; opacity: 0; transition: opacity var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.run:hover .rm-x, .run:focus-within .rm-x { opacity: 1; }
+.run .rm-x:hover { background: var(--fail-soft); color: var(--fail); }
+.run .rm-x svg { width: 13px; height: 13px; }
+.side-empty { padding: 24px 16px; color: var(--muted); font-size: 12.5px; text-align: center; }
+
+/* ---------- Main ---------- */
+.main { grid-area: main; overflow-y: auto; min-height: 0; }
+.main-inner { padding: 22px 26px 60px; max-width: 1100px; margin: 0 auto; }
+
+.run-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.run-head h1 { margin: 0 0 4px; font-size: 21px; font-family: var(--font-mono); letter-spacing: -.01em; }
+.run-head h1 .proc { color: var(--muted); font-size: .62em; font-weight: 600; vertical-align: middle; }
+.run .key .proc { color: var(--muted); font-weight: 600; font-size: .92em; }
+.run-head .crumbs { color: var(--muted); font-size: 12.5px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.run-head .crumbs .sep { opacity: .5; }
+.run-head .crumbs b { color: var(--text-2); font-weight: 600; }
+.head-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.props { display: flex; gap: 7px; flex-wrap: wrap; }
+.prop { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; }
+.prop span { color: var(--muted); }
+
+/* painel de ambiente / configuracao do run */
+.run-details { margin: 0 0 18px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.run-details > summary { list-style: none; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); font-size: 12.5px; color: var(--text-2); }
+.run-details > summary::-webkit-details-marker { display: none; }
+.run-details > summary .chev { transition: transform var(--speed) var(--ease); color: var(--muted); display: grid; place-items: center; }
+.run-details[open] > summary .chev { transform: rotate(180deg); }
+.run-details .rd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 18px; padding: 12px 14px; }
+.run-details .rd-item { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-details .rd-item span { color: var(--muted); }
+.run-details .rd-sec { grid-column: 1 / -1; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
+.run-details .rd-sec:first-child { margin-top: 0; }
+
+/* summary */
+.summary { display: grid; grid-template-columns: 168px repeat(6, 1fr); gap: 12px; margin-bottom: 22px; }
+.ring-card {
+  grid-row: span 2; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+}
+.ring { position: relative; width: 116px; height: 116px; }
+.ring svg { transform: rotate(-90deg); }
+.ring .track { stroke: var(--surface-3); }
+.ring .prog { stroke: var(--rate-color, var(--pass)); stroke-linecap: round; transition: stroke-dashoffset .9s var(--ease), stroke .4s var(--ease); }
+.ring .val { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring .val b { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1; }
+.ring .val small { font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
+.ring-card .cap { font-size: 11px; color: var(--muted); letter-spacing: .07em; text-transform: uppercase; }
+
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 13px 14px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden;
+}
+.stat::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, var(--muted)); opacity: .8; }
+.stat .lab { font-size: 11px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.stat .lab svg { width: 13px; height: 13px; color: var(--c, var(--muted)); }
+.stat .num { font-family: var(--font-mono); font-size: 26px; font-weight: 700; line-height: 1; color: var(--c, var(--text)); }
+.stat.muted .num { color: var(--text); }
+
+/* toolbar (filters) */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2);
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  transition: all var(--speed) var(--ease);
+}
+.chip:hover { border-color: var(--border-strong); color: var(--text); }
+.chip .c-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--muted)); }
+.chip .c-n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.chip.on { background: var(--c-soft, var(--accent-soft)); border-color: var(--c, var(--accent)); color: var(--c, var(--accent)); }
+.chip.on .c-n { color: inherit; }
+.toolbar .grow { flex: 1; }
+.case-search { min-width: 200px; }
+
+/* suites + cases */
+.suite { margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.suite-head {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  background: var(--surface-2); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+}
+.suite-head .chev { transition: transform var(--speed) var(--ease); color: var(--muted); display: grid; place-items: center; }
+.suite.collapsed .chev { transform: rotate(-90deg); }
+.suite-head .sname { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
+.suite-head .smeta { color: var(--muted); font-size: 12px; }
+.suite-head .sbar { margin-left: auto; width: 120px; height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; display: flex; }
+.suite-head .sbar i { height: 100%; }
+.suite-head .scount { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.suite-head .sproc { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--st-color, var(--muted)); background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+.suite.collapsed .cls-group { display: none; }
+.cls-divider { display: flex; align-items: center; gap: 9px; padding: 7px 14px; background: color-mix(in srgb, var(--surface-2) 60%, transparent); border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); }
+.cls-divider .cls-ic { color: var(--muted); display: grid; place-items: center; }
+.cls-divider .cls-n { color: var(--muted); margin-left: auto; }
+.suite-empty { padding: 16px 14px; color: var(--muted); font-size: 12.5px; text-align: center; border-top: 1px solid var(--border); }
+
+.cases { list-style: none; margin: 0; padding: 0; }
+.suite.collapsed .cases { display: none; }
+.case { border-top: 1px solid var(--border); }
+.case:first-child { border-top: 0; }
+.case-row {
+  display: grid; grid-template-columns: 26px 1fr auto auto; gap: 12px; align-items: center;
+  padding: 9px 14px; width: 100%; text-align: left; background: transparent; border: 0;
+  transition: background var(--speed) var(--ease);
+}
+.case-row[data-clickable="1"] { cursor: pointer; }
+.case-row:hover { background: var(--surface-2); }
+.case .ic { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: var(--c-soft); color: var(--c); }
+.case .ic svg { width: 12px; height: 12px; }
+.case .nm { min-width: 0; }
+.case .nm .n { font-family: var(--font-mono); font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case .nm .cls { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.case .st { font-size: 11px; font-weight: 700; color: var(--c); text-transform: uppercase; letter-spacing: .04em; }
+.case .tm { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-width: 56px; text-align: right; }
+.case .chv { color: var(--muted); display: grid; place-items: center; transition: transform var(--speed) var(--ease); }
+.case.open .chv { transform: rotate(180deg); }
+
+.detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--speed) var(--ease); }
+.case.open .detail { grid-template-rows: 1fr; }
+.detail > div { overflow: hidden; }
+.detail-in { padding: 0 14px 14px 52px; }
+.detail-msg {
+  display: flex; gap: 9px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-sm);
+  background: var(--c-soft); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+  color: var(--c); font-weight: 600; font-size: 12.5px; margin-bottom: 10px;
+}
+.detail-msg svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+.detail-msg .ty { font-family: var(--font-mono); font-weight: 700; opacity: .85; }
+.trace {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.65; color: var(--text-2);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 11px 13px; white-space: pre-wrap; word-break: break-word; overflow-x: auto; margin: 0;
+}
+.trace-lab { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 5px; }
+
+/* assercoes dentro de um metodo */
+.detail-in.asserts { padding: 4px 14px 14px 52px; display: flex; flex-direction: column; gap: 6px; }
+.assert { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 8px 11px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--border); }
+.assert .a-ic { width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; color: var(--c); background: var(--c-soft); margin-top: 1px; }
+.assert .a-ic svg { width: 10px; height: 10px; }
+.a-body { min-width: 0; }
+.a-desc { font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.a-msg { font-family: var(--font-mono); font-size: 11.5px; color: var(--c); margin-top: 4px; word-break: break-word; }
+.a-msg .ty { opacity: .85; font-weight: 700; }
+.a-cmp { display: flex; gap: 16px; margin-top: 5px; font-size: 11.5px; flex-wrap: wrap; }
+.a-cmp span { color: var(--muted); }
+.a-cmp .got b { color: var(--fail); font-family: var(--font-mono); margin-left: 3px; }
+.a-cmp .exp b { color: var(--pass); font-family: var(--font-mono); margin-left: 3px; }
+.a-tag { font-family: var(--font-mono); font-size: 10px; color: var(--muted); background: var(--surface-3); border: 1px solid var(--border); padding: 2px 7px; border-radius: 999px; white-space: nowrap; align-self: start; }
+
+.no-cases { padding: 26px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* empty / welcome */
+.welcome { display: grid; place-items: center; height: 100%; padding: 30px; }
+.dropzone {
+  width: 100%; max-width: 560px; text-align: center;
+  border: 1.5px dashed var(--border-strong); border-radius: 18px; padding: 46px 34px;
+  background: var(--surface); transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease);
+}
+.dropzone .big {
+  width: 58px; height: 58px; border-radius: 16px; margin: 0 auto 18px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.dropzone .big svg { width: 28px; height: 28px; }
+.dropzone h2 { margin: 0 0 8px; font-size: 18px; }
+.dropzone p { margin: 0 auto 20px; color: var(--text-2); max-width: 380px; }
+.dropzone .acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.dropzone code { font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 5px; }
+.dropzone .hint { margin-top: 18px; font-size: 12px; color: var(--muted); }
+
+/* drag overlay */
+.drag-over { position: fixed; inset: 0; z-index: 100; display: none; place-items: center; background: color-mix(in srgb, var(--bg) 75%, transparent); backdrop-filter: blur(3px); }
+body.dragging .drag-over { display: grid; }
+.drag-over .box { border: 2px dashed var(--accent); border-radius: 20px; padding: 50px 70px; background: var(--surface); text-align: center; box-shadow: var(--shadow); }
+.drag-over .box svg { width: 40px; height: 40px; color: var(--accent); }
+.drag-over .box p { margin: 14px 0 0; font-weight: 700; font-size: 16px; font-family: var(--font-mono); }
+
+/* toasts */
+.toasts { position: fixed; bottom: 18px; right: 18px; z-index: 200; display: flex; flex-direction: column; gap: 9px; }
+.toast {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: var(--r);
+  background: var(--surface-3); border: 1px solid var(--border-strong); color: var(--text);
+  box-shadow: var(--shadow); font-size: 13px; font-weight: 500;
+  animation: toastIn .3s var(--ease); max-width: 380px;
+}
+.toast svg { width: 16px; height: 16px; flex: none; }
+.toast.ok { border-color: color-mix(in srgb, var(--pass) 50%, var(--border)); } .toast.ok svg { color: var(--pass); }
+.toast.err { border-color: color-mix(in srgb, var(--fail) 50%, var(--border)); } .toast.err svg { color: var(--fail); }
+.toast.info svg { color: var(--accent); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* reveal animation */
+@keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.reveal { animation: reveal .4s var(--ease) backwards; }
+
+/* mobile */
+.menu-btn { display: none; }
+@media (max-width: 880px) {
+  .app { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
+  .side {
+    position: fixed; top: 58px; bottom: 0; left: 0; width: 86%; max-width: 340px; z-index: 40;
+    transform: translateX(-104%); transition: transform var(--speed) var(--ease);
+    background: var(--surface); box-shadow: var(--shadow);
+  }
+  body.side-open .side { transform: none; }
+  .menu-btn { display: inline-flex; }
+  .summary { grid-template-columns: 1fr 1fr; }
+  .ring-card { grid-column: 1 / -1; flex-direction: row; gap: 18px; }
+  .main-inner { padding: 18px 16px 50px; }
+  .scrim { position: fixed; inset: 58px 0 0 0; background: rgba(0,0,0,.45); z-index: 35; display: none; }
+  body.side-open .scrim { display: block; }
+}
+@media (max-width: 560px) {
+  .summary { grid-template-columns: 1fr 1fr; }
+  .brand .sub { display: none; }
+  .top .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Topbar -->
+  <header class="top">
+    <button class="btn icon ghost menu-btn" id="menuBtn" aria-label="Abrir lista de execucoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </span>
+      <span><b>PROBAT</b><span class="slash">//</span><b>VIEWER</b></span>
+      <span class="tag" id="appVer" title="Versao do ProBat Viewer">v—</span>
+      <span class="sub hide-sm">· resultados de teste</span>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn primary" id="pickBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      <span class="hide-sm">Selecionar XML</span>
+    </button>
+    <button class="btn icon ghost" id="themeBtn" aria-label="Alternar tema claro/escuro" title="Tema">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+    <input type="file" id="fileInput" accept=".xml,application/xml,text/xml" multiple hidden>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="side" id="side">
+    <div class="side-head">
+      <div class="side-title">
+        <h2>Execucoes</h2>
+        <span class="count-pill" id="runCount">0</span>
+      </div>
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input type="text" id="sideSearch" placeholder="Filtrar por chave / arquivo" aria-label="Filtrar execucoes">
+      </label>
+      <div class="sort-row">
+        <span class="sort-lab">Ordenar</span>
+        <select id="sortKey" class="sort-sel" aria-label="Criterio de ordenacao">
+          <option value="when">Data da execucao</option>
+          <option value="added">Adicionado</option>
+          <option value="rate">Taxa de aprovacao</option>
+          <option value="fails">Falhas</option>
+          <option value="key">Chave</option>
+          <option value="proc">Proc</option>
+        </select>
+        <button id="sortDir" class="btn icon ghost sort-dir" title="Inverter ordem" aria-label="Inverter ordem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
+        </button>
+      </div>
+    </div>
+    <ul class="runs" id="runs" role="listbox" aria-label="Execucoes carregadas"></ul>
+    <div class="side-head" style="border-top:1px solid var(--border);padding-top:10px;">
+      <button class="btn ghost" id="clearBtn" style="justify-content:center;color:var(--muted);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Limpar tudo
+      </button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- Main -->
+  <main class="main" id="main"></main>
+</div>
+
+<!-- drag overlay -->
+<div class="drag-over" aria-hidden="true">
+  <div class="box">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></svg>
+    <p>Solte os arquivos .xml</p>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   ProBat Viewer — logica
+   ============================================================================ */
+const VIEWER_VERSION = "2.1.0";   // 2.x = modelo multi-suite (proc) — Run -> Suite -> Classe -> Metodo -> Assercao; 2.1 = parametros do run (runParameters)
+const LS_RUNS  = "probat-viewer:runs:v1";
+const LS_THEME = "probat-viewer:theme";
+
+/* ---- icones (inline SVG, retornam markup) ---- */
+const I = {
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  x:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  bang:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v5M12 17.5v.5"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+  skip:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+  chevron:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  x14:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+};
+const STATUS = {
+  passed:  { color: "var(--pass)",  soft: "var(--pass-soft)",  ic: I.check, label: "Passou",  pt: "Passou" },
+  failed:  { color: "var(--fail)",  soft: "var(--fail-soft)",  ic: I.x,     label: "Falhou",  pt: "Falhou" },
+  error:   { color: "var(--error)", soft: "var(--error-soft)", ic: I.bang,  label: "Erro",    pt: "Erro" },
+  skipped: { color: "var(--skip)",  soft: "var(--skip-soft)",  ic: I.skip,  label: "Pulado",  pt: "Pulado" }
+};
+
+/* rotulos pt-BR p/ chaves conhecidas de runParameters; fallback = chave crua (generico) */
+const RUN_PARAM_LABELS = { branch:"Filial", product:"Produto", supplier:"Fornecedor", request:"Solicitação", emp:"Empresa", fil:"Filial Trab" };
+const rpLabel = (k) => RUN_PARAM_LABELS[k] || k;
+
+/* ---- estado ---- */
+let runs = [];                 // [{id, fileName, rawXml, addedAt, key, timestamp, parsed}]
+let selectedId = null;
+let filter = "all";
+let caseQuery = "";
+let sideQuery = "";
+let sortKey = "when";          // when | added | rate | fails | key | proc
+let sortDir = "desc";          // desc | asc
+const collapsed = new Set();   // suites recolhidas (chave "suite:"+proc) na execucao atual
+const openCases = new Set();   // casos expandidos (id) na execucao atual
+
+/* ---- util ---- */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = (s) => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => (crypto && crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.floor(Math.random()*1e6));
+function fmtTime(sec){ const n = Number(sec)||0; if(n>=60){const m=Math.floor(n/60);return m+"m "+(n%60).toFixed(1)+"s";} return n.toFixed(n<1?3:2)+"s"; }
+function fmtWhen(iso, fallback){
+  let d = iso ? new Date(iso) : null;
+  if(!d || isNaN(d)) d = fallback ? new Date(fallback) : null;
+  if(!d || isNaN(d)) return "—";
+  const p = (x)=>String(x).padStart(2,"0");
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/* ---- helpers de parsing ---- */
+function shortClass(c){ if(!c) return "(sem classe)"; const seg = String(c).split(/[.\\/]/); return seg[seg.length-1] || c; }
+function prettyName(n){
+  return String(n||"").replace(/^Method:\s*/i,"").replace(/^Class:\s*/i,"").replace(/\(\)\s*$/,"").trim() || "(sem nome)";
+}
+// system-out do ProBat: "Folder: .. | Assert: EQUALS | Result: {C}-[422] | Expected: {C}-[200] | Description: .."
+function parseSysOut(txt){
+  const o = { assert:"", result:"", expected:"", desc:"" };
+  if(!txt) return o;
+  String(txt).split(/\s*\|\s*/).forEach(part => {
+    const m = part.match(/^([A-Za-z][\w ]*?)\s*:\s*([\s\S]*)$/);
+    if(!m) return;
+    const k = m[1].trim().toLowerCase();
+    if(k==="assert") o.assert = m[2].trim();
+    else if(k==="result") o.result = m[2].trim();
+    else if(k==="expected") o.expected = m[2].trim();
+    else if(k==="description") o.desc = m[2].trim();
+  });
+  return o;
+}
+// data/hora da execucao: date+time (hora local do servidor) -> epoch 'ended' -> timestamp ISO
+function probatWhen(root, doc){
+  const ex = doc.getElementsByTagName("exec")[0];
+  const ts = doc.getElementsByTagName("testsuite")[0];
+  const dStr = root.getAttribute && root.getAttribute("date");
+  const tStr = root.getAttribute && root.getAttribute("time");
+  if(dStr){
+    const dm = dStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    const tm = (tStr||"").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if(dm){ let y=+dm[3]; if(y<100) y+=2000; return new Date(y, +dm[2]-1, +dm[1], tm?+tm[1]:0, tm?+tm[2]:0, tm&&tm[3]?+tm[3]:0); }
+  }
+  const ended = (ex && ex.getAttribute("ended")) || (ts && ts.getAttribute("ended"));
+  if(ended){ const n = parseFloat(ended); if(!isNaN(n)) return new Date(n*1000); }
+  const iso = (root.getAttribute && root.getAttribute("timestamp")) || (ts && ts.getAttribute("timestamp"));
+  if(iso){ const d = new Date(iso); if(!isNaN(d)) return d; }
+  return null;
+}
+
+/* ---- parser ProBat (multi-suite) ----
+   <testsuites> (export) -> N <testsuite> (proc+name+exec) -> <testcase> (assercao).
+   Hierarquia: Run -> Suite -> Class -> Method -> Assercao. */
+
+// elementos-filho diretos viram {tag: textoTrim}
+function childTextMap(el){
+  const o = {};
+  if(!el) return o;
+  Array.from(el.children).forEach(c => { o[c.tagName] = (c.textContent||"").trim(); });
+  return o;
+}
+
+// bloco <exec>: metadados/ambiente/config de uma suite
+function parseExec(execEl){
+  if(!execEl) return null;
+  const ini = execEl.getElementsByTagName("iniconfiguration")[0];
+  const inp = execEl.getElementsByTagName("inputParameters")[0];
+  const srv = execEl.getElementsByTagName("info_server")[0];
+  return {
+    code: execEl.getAttribute("code") || "",
+    time: Number(execEl.getAttribute("time")) || 0,
+    endedMs: (parseFloat(execEl.getAttribute("ended")) || 0) * 1000,
+    iniConfig: childTextMap(ini),
+    inputParams: Object.entries(childTextMap(inp)).map(([name,value]) => ({ name, value })),
+    env: childTextMap(srv)
+  };
+}
+
+// 1 <testcase> = 1 assercao. accum (opcional) soma os contadores de assercao.
+function parseAssert(tc, accum){
+  const kids = Array.from(tc.children);
+  const fail = kids.find(c => c.tagName.toLowerCase()==="failure");
+  const err  = kids.find(c => c.tagName.toLowerCase()==="error");
+  const skip = kids.find(c => c.tagName.toLowerCase()==="skipped");
+  const so   = tc.getElementsByTagName("system-out")[0];
+  const soTxt= so ? (so.textContent||"").trim() : "";
+  const info = parseSysOut(soTxt);
+  let status="passed", message="", type="";
+  if(fail){ status="failed"; message=fail.getAttribute("message")||""; type=fail.getAttribute("type")||""; }
+  else if(err){ status="error"; message=err.getAttribute("message")||""; type=err.getAttribute("type")||""; }
+  else if(skip){ status="skipped"; message=skip.getAttribute("message")||""; }
+  if(accum){ accum.total++; accum[status==="passed"?"ok":status==="skipped"?"skip":status==="error"?"error":"fail"]++; }
+  return {
+    status, message, type,
+    time: Number(tc.getAttribute("time")) || 0,
+    assertType: info.assert, result: info.result, expected: info.expected,
+    desc: info.desc || tc.getAttribute("description") || "", raw: soTxt
+  };
+}
+
+// agrupa as assercoes de uma suite por classe -> metodo
+function buildMethod(cls, mname, arr){
+  let tsum=0, ok=0, fl=0;
+  arr.forEach(x => { tsum+=x.time; if(x.status==="passed"||x.status==="skipped") ok++; else fl++; });
+  const st = arr.some(x=>x.status==="error") ? "error"
+           : arr.some(x=>x.status==="failed") ? "failed"
+           : (arr.length>0 && arr.every(x=>x.status==="skipped")) ? "skipped" : "passed";
+  let label = prettyName(mname);
+  if(/^Class:/i.test(mname)) label = "Classe: " + shortClass(label);   // pseudo-metodo de nivel de classe
+  return { id:uid(), label, rawName:mname, classname:cls, status:st,
+           time:tsum, asserts:arr, counts:{ total:arr.length, ok, fail:fl } };
+}
+
+const PRIO = { error:3, failed:2, skipped:1, passed:0 };
+function emptyCounts(){ return { methods:0, passed:0, failed:0, error:0, skipped:0, time:0 }; }
+
+function groupTestcases(tcEls){
+  const assertCounts = { total:0, ok:0, fail:0, error:0, skip:0 };
+  const byClass = new Map(); const order = [];
+  tcEls.forEach(tc => {
+    const a = parseAssert(tc, assertCounts);
+    const cls = tc.getAttribute("classname") || "(sem classe)";
+    const mname = tc.getAttribute("name") || "(sem nome)";
+    if(!byClass.has(cls)){ byClass.set(cls, new Map()); order.push(cls); }
+    const mm = byClass.get(cls);
+    if(!mm.has(mname)) mm.set(mname, []);
+    mm.get(mname).push(a);
+  });
+  const classes = order.map(cls => {
+    const mm = byClass.get(cls);
+    const methods = []; const cc = emptyCounts();
+    for(const [mname, arr] of mm){
+      const m = buildMethod(cls, mname, arr);
+      methods.push(m);
+      cc.methods++; cc[m.status]++; cc.time += m.time;
+    }
+    methods.sort((a,b) => (PRIO[b.status]-PRIO[a.status]) || a.label.localeCompare(b.label));
+    return { full:cls, name:shortClass(cls), methods, counts:cc };
+  });
+  return { classes, assertCounts };
+}
+
+function suiteStatus(c){
+  if(c.error) return "error";
+  if(c.failed) return "failed";
+  if(c.methods===0) return "skipped";                                   // suite vazia
+  if(c.skipped && c.passed===0 && c.failed===0 && c.error===0) return "skipped";
+  return "passed";
+}
+
+function buildSuite(tsEl, execMap){
+  const proc = tsEl.getAttribute("proc") || "";
+  const name = tsEl.getAttribute("name") || (proc ? "proc "+proc : "(suite)");
+  const custom = tsEl.getAttribute("custom") || "";
+  const execCode = tsEl.getAttribute("exec") || "";
+  const exec = execMap.get(execCode) || null;
+  const attrN = (n) => Number(tsEl.getAttribute(n)) || 0;
+  const tcEls = Array.from(tsEl.getElementsByTagName("testcase"));
+  const { classes, assertCounts } = groupTestcases(tcEls);
+  const counts = Object.assign(emptyCounts(), { classes: classes.length, asserts: assertCounts });
+  classes.forEach(c => {
+    counts.methods += c.counts.methods; counts.passed += c.counts.passed;
+    counts.failed  += c.counts.failed;  counts.error  += c.counts.error;
+    counts.skipped += c.counts.skipped; counts.time   += c.counts.time;
+  });
+  const endedMs = (parseFloat(tsEl.getAttribute("ended"))||0)*1000 || (exec && exec.endedMs) || 0;
+  return {
+    proc, name, custom, execCode, exec,
+    execTime: exec ? exec.time : 0, endedMs,
+    attrCounts: { tests:attrN("tests"), ok:attrN("ok"), failures:attrN("failures"),
+                  skipped:attrN("skipped"), time:Number(tsEl.getAttribute("time"))||0 },
+    classes, counts, status: suiteStatus(counts), empty: counts.methods===0
+  };
+}
+
+function parseExport(rawXml, fileName){
+  const doc = new DOMParser().parseFromString(rawXml, "application/xml");
+  if(doc.querySelector("parsererror")) throw new Error("XML invalido");
+  const root = doc.documentElement;
+
+  const rpEl = root.getElementsByTagName("runParameters")[0];
+  const runParams = rpEl
+    ? Object.entries(childTextMap(rpEl)).map(([name,value]) => ({ name, value }))
+    : [];
+
+  const tsEls = Array.from(doc.getElementsByTagName("testsuite"));
+  if(!tsEls.length) throw new Error("Nenhuma <testsuite> encontrada");
+
+  const execMap = new Map();
+  Array.from(doc.getElementsByTagName("exec")).forEach(e => { const x = parseExec(e); if(x) execMap.set(x.code, x); });
+  const firstExec = execMap.size ? execMap.values().next().value : null;
+
+  const suites = tsEls.map(ts => buildSuite(ts, execMap));
+
+  const totals = { suites: suites.length, classes:0, methods:0, passed:0, failed:0, error:0, skipped:0, time:0,
+                   asserts:{ total:0, ok:0, fail:0, error:0, skip:0 } };
+  const clsSeen = new Set();
+  suites.forEach(s => {
+    totals.methods += s.counts.methods; totals.passed += s.counts.passed; totals.failed += s.counts.failed;
+    totals.error += s.counts.error; totals.skipped += s.counts.skipped; totals.time += s.counts.time;
+    totals.asserts.total += s.counts.asserts.total; totals.asserts.ok += s.counts.asserts.ok;
+    totals.asserts.fail += s.counts.asserts.fail; totals.asserts.error += s.counts.asserts.error;
+    totals.asserts.skip += s.counts.asserts.skip;
+    s.classes.forEach(c => clsSeen.add(s.proc + "|" + c.full));
+  });
+  totals.classes = clsSeen.size;
+
+  const customs = Array.from(new Set(suites.map(s => s.custom).filter(Boolean)));
+  const rootName = (root.getAttribute && root.getAttribute("name")) || "";
+  const key = customs.length===1 ? customs[0]
+            : (root.getAttribute && root.getAttribute("custom"))
+            || rootName
+            || (fileName||"").replace(/\.xml$/i,"") || "execucao";
+
+  const whenDate = probatWhen(root, doc);
+  const whenMs = whenDate ? whenDate.getTime() : (suites[0] ? suites[0].endedMs : 0);
+  const rate = totals.methods ? Math.round((totals.passed/totals.methods)*100) : 0;
+
+  return {
+    rootName, key, customs, whenMs, suites, totals, rate,
+    env: firstExec ? firstExec.env : {},
+    iniConfig: firstExec ? firstExec.iniConfig : {},
+    inputParams: firstExec ? firstExec.inputParams : [],
+    runParams,
+  };
+}
+
+/* status agregado de uma execucao */
+function runStatus(p){
+  if(p.totals.error) return "error";
+  if(p.totals.failed) return "failed";
+  if(p.totals.skipped && p.totals.passed===0) return "skipped";
+  return "passed";
+}
+
+/* ---- persistencia ---- */
+function save(){
+  try {
+    const slim = runs.map(r => ({ id:r.id, fileName:r.fileName, rawXml:r.rawXml, addedAt:r.addedAt, key:r.key, timestamp:r.timestamp }));
+    const json = JSON.stringify(slim);
+    if(json.length > 4_500_000){ toast("Armazenamento quase cheio — limpe execucoes antigas.", "err"); }
+    localStorage.setItem(LS_RUNS, json);
+  } catch(e){ toast("Nao foi possivel salvar (storage cheio).", "err"); }
+}
+function load(){
+  try {
+    const raw = localStorage.getItem(LS_RUNS);
+    if(!raw) return;
+    JSON.parse(raw).forEach(r => {
+      try { r.parsed = parseExport(r.rawXml, r.fileName); runs.push(r); } catch(_){}
+    });
+  } catch(_){}
+}
+
+/* ---- adicionar execucao ---- */
+function addRun(rawXml, fileName){
+  let parsed;
+  try { parsed = parseExport(rawXml, fileName); }
+  catch(e){ toast(`${fileName}: ${e.message}`, "err"); return null; }
+  // dedup por key+data (ou arquivo+tamanho)
+  const sig = (parsed.key||"") + "|" + (parsed.whenMs||"") + "|" + rawXml.length;
+  const existing = runs.find(r => ((r.key||"")+"|"+(r.timestamp||"")+"|"+r.rawXml.length) === sig);
+  if(existing){
+    existing.addedAt = Date.now();
+    return existing;
+  }
+  const run = { id: uid(), fileName, rawXml, addedAt: Date.now(), key: parsed.key, timestamp: parsed.whenMs, parsed };
+  runs.push(run);
+  return run;
+}
+
+function ingestFiles(fileList, opts={}){
+  const files = Array.from(fileList).filter(f => /\.xml$/i.test(f.name));
+  if(!files.length){ toast("Nenhum arquivo .xml encontrado.", "err"); return; }
+  Promise.all(files.map(f => f.text().then(t => ({t, name:f.name})))).then(items => {
+    let added = 0, last = null;
+    items.forEach(it => { const r = addRun(it.t, it.name); if(r){ added++; last = r; } });
+    save();
+    if(last){ selectedId = last.id; }
+    renderAll();
+    if(added) toast(`${added} resultado${added>1?"s":""} carregado${added>1?"s":""}.`, "ok");
+  });
+}
+
+/* ---- remover / limpar ---- */
+function removeRun(id){
+  runs = runs.filter(r => r.id !== id);
+  if(selectedId === id) selectedId = runs.length ? sortedRuns()[0].id : null;
+  save(); renderAll();
+}
+function clearAll(){
+  if(!runs.length) return;
+  if(!confirm("Remover todas as execucoes carregadas?")) return;
+  runs = []; selectedId = null; save(); renderAll();
+  toast("Lista limpa.", "info");
+}
+
+/* ---- toast ---- */
+function toast(msg, kind="info"){
+  const el = document.createElement("div");
+  el.className = "toast " + kind;
+  const ic = kind==="ok"?I.check : kind==="err"?I.bang : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>';
+  el.innerHTML = ic + "<span>" + esc(msg) + "</span>";
+  $("#toasts").appendChild(el);
+  setTimeout(() => { el.style.transition="opacity .3s, transform .3s"; el.style.opacity="0"; el.style.transform="translateY(8px)"; setTimeout(()=>el.remove(),320); }, 3200);
+}
+
+/* ============================ RENDER ============================ */
+function renderAll(){ renderSidebar(); renderMain(); }
+
+const LS_SORT = "probat-viewer:sort";
+function runVal(r, k){
+  const p = r.parsed || {};
+  const t = p.totals || {};
+  const a = (t.asserts) || {};
+  if(k==="when")  return p.whenMs || r.addedAt;
+  if(k==="added") return r.addedAt;
+  if(k==="rate")  return p.rate || 0;
+  if(k==="fails") return (a.fail||0) + (a.error||0);
+  if(k==="proc")  return (p.suites && p.suites[0]) ? (parseInt(p.suites[0].proc,10)||0) : 0;
+  return 0;
+}
+function sortedRuns(){
+  const dir = sortDir==="asc" ? 1 : -1;
+  return [...runs].sort((a,b) => {
+    let cmp = sortKey==="key" ? (a.key||"").localeCompare(b.key||"") : runVal(a,sortKey)-runVal(b,sortKey);
+    if(cmp===0) cmp = a.addedAt - b.addedAt;   // desempate estavel
+    return cmp * dir;
+  });
+}
+function saveSort(){ try { localStorage.setItem(LS_SORT, JSON.stringify({key:sortKey, dir:sortDir})); } catch(_){} }
+
+function renderSidebar(){
+  const list = $("#runs");
+  $("#runCount").textContent = runs.length;
+  const q = sideQuery.trim().toLowerCase();
+  const items = sortedRuns().filter(r => {
+    if(!q) return true;
+    const pv = ((r.parsed && r.parsed.runParams) || []).map(x => x.value).join(" ");
+    return (r.key + " " + r.fileName + " " + pv).toLowerCase().includes(q);
+  });
+  if(!runs.length){ list.innerHTML = `<div class="side-empty">Nenhuma execucao.<br>Carregue um XML para comecar.</div>`; return; }
+  if(!items.length){ list.innerHTML = `<div class="side-empty">Nada corresponde a "<b>${esc(sideQuery)}</b>".</div>`; return; }
+
+  list.innerHTML = items.map(r => {
+    const p = r.parsed, t = p.totals, st = STATUS[runStatus(p)];
+    const seg = (n, c) => n>0 ? `<i style="width:${(n/(t.methods||1)*100)||0}%;background:${c}"></i>` : "";
+    const nSuites = t.suites||0;
+    const procTag = nSuites===1 && p.suites[0] ? `#${esc(p.suites[0].proc)}` : `${nSuites} suites`;
+    return `
+    <li>
+      <div class="run ${r.id===selectedId?"active":""}" role="option" tabindex="0"
+           aria-selected="${r.id===selectedId}" data-id="${r.id}"
+           style="--st-color:${st.color};--st-soft:${st.soft}">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="meta">
+          <span class="key" title="${esc(r.key)} · ${esc(procTag)}">${esc(r.key)} <span class="proc">${esc(procTag)}</span></span>
+          <span class="when">${fmtWhen(p.whenMs, r.addedAt)}</span>
+        </span>
+        <span class="rm">
+          <span class="badge">${t.passed}/${t.methods}</span>
+          <button class="rm-x" data-remove="${r.id}" title="Remover" aria-label="Remover execucao">${I.x14}</button>
+        </span>
+        <span class="bar" aria-hidden="true">
+          ${seg(t.passed,"var(--pass)")}${seg(t.failed,"var(--fail)")}${seg(t.error,"var(--error)")}${seg(t.skipped,"var(--skip)")}
+        </span>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+function rateColor(rate){
+  if(rate>=100) return "var(--pass)";
+  if(rate>=70) return "var(--skip)";
+  return "var(--fail)";
+}
+
+function renderMain(){
+  const main = $("#main");
+  const run = selectedId ? runs.find(r => r.id === selectedId) : null;
+
+  if(!run){
+    main.innerHTML = `
+    <div class="welcome">
+      <div class="dropzone" id="welcomeDrop">
+        <div class="big">${I.check}</div>
+        <h2>Visualize seus resultados ProBat</h2>
+        <p>Arraste arquivos <code>.xml</code> exportados pelo ProBat aqui, ou selecione-os. O motor grava o XML em <code>protheus_data</code>.</p>
+        <div class="acts">
+          <button class="btn primary" data-act="pick">Selecionar XML</button>
+        </div>
+        <div class="hint">${runs.length
+          ? `Ou selecione uma das <b>${runs.length}</b> execuc${runs.length>1?"oes":"ao"} na barra lateral.`
+          : `Largue qualquer <code>.xml</code> exportado pelo ProBat (<code>EXPORT_FORMAT=JUnit</code>).`}</div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const p = run.parsed, t = p.totals;
+  const rate = p.rate, rc = rateColor(rate);
+  const C = 2 * Math.PI * 50;
+  const off = C - (rate/100)*C;
+  const a = t.asserts;
+
+  // painel de ambiente/config (info_server + iniconfiguration + inputParameters do 1o exec)
+  const envItem = (k,v) => `<div class="rd-item"><span>${esc(k)}</span> ${esc(v)}</div>`;
+  const envKeys = ["so","AppServerVersion","AppServerBuild","SmartClientBuild","TLPPVersion","TLPPVersionName","InternalAppVersionName"];
+  const envHtml = envKeys.filter(k => p.env[k]).map(k => envItem(k, p.env[k])).join("");
+  const iniKeys = ["DBTYPE","EXPORT_FORMAT","CODECOVERAGE","SOURCE_PATH","TESTS_DISCOVERY_MODE"];
+  const iniHtml = iniKeys.filter(k => p.iniConfig[k]!==undefined && p.iniConfig[k]!=="").map(k => envItem(k, p.iniConfig[k])).join("");
+  const inpHtml = (p.inputParams||[]).map(pp => envItem(pp.name, pp.value)).join("");
+  const rpHtml = (p.runParams||[]).map(pp => envItem(rpLabel(pp.name), pp.value || "(vazio)")).join("");
+  const hasDetails = envHtml || iniHtml || inpHtml || rpHtml;
+  const detailsHtml = hasDetails ? `
+    <details class="run-details reveal" style="animation-delay:.06s">
+      <summary><span class="chev">${I.chevron}</span> Ambiente &amp; configuração do ProBat</summary>
+      <div class="rd-grid">
+        ${envHtml ? `<div class="rd-sec">Ambiente</div>${envHtml}` : ""}
+        ${iniHtml ? `<div class="rd-sec">Configuração</div>${iniHtml}` : ""}
+        ${inpHtml ? `<div class="rd-sec">Parâmetros de entrada</div>${inpHtml}` : ""}
+        ${rpHtml ? `<div class="rd-sec">Parâmetros do teste</div>${rpHtml}` : ""}
+      </div>
+    </details>` : "";
+
+  const stat = (lab, num, c, ic, title) => `
+    <div class="stat" style="--c:${c}"${title?` title="${esc(title)}"`:""}>
+      <span class="lab">${ic?`<span>${ic}</span>`:""}${lab}</span>
+      <span class="num">${num}</span>
+    </div>`;
+  const layersIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
+  const suitesIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+  const clsIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>';
+
+  const chips = [
+    ["all","Todos", t.methods, "var(--accent)","var(--accent-soft)"],
+    ["passed","Passou", t.passed, "var(--pass)","var(--pass-soft)"],
+    ["failed","Falhou", t.failed, "var(--fail)","var(--fail-soft)"],
+    ["error","Erros", t.error, "var(--error)","var(--error-soft)"],
+    ["skipped","Pulados", t.skipped, "var(--skip)","var(--skip-soft)"]
+  ].map(([key,lab,n,c,soft]) => `
+    <button class="chip ${filter===key?"on":""}" data-filter="${key}" style="--c:${c};--c-soft:${soft}">
+      ${key!=="all"?`<span class="c-dot"></span>`:""}${lab}<span class="c-n">${n}</span>
+    </button>`).join("");
+
+  const rpChips = (p.runParams||[]).filter(pp => pp.value).map(pp =>
+    `<div class="prop"><span>${esc(rpLabel(pp.name))}</span> ${esc(pp.value)}</div>`).join("");
+
+  main.innerHTML = `
+  <div class="main-inner">
+    <div class="run-head reveal">
+      <div>
+        <h1>${esc(p.key)} <span class="proc">${t.suites} suite${t.suites>1?"s":""}</span></h1>
+        <div class="crumbs">
+          <span><b>${t.suites}</b> suite${t.suites>1?"s":""}</span>
+          <span class="sep">·</span>
+          <span>${t.classes} classe${t.classes>1?"s":""}</span>
+          <span class="sep">·</span>
+          <span><b>${t.methods}</b> métodos</span>
+          <span class="sep">·</span>
+          <span>${a.total} assercões <b style="color:var(--pass)">${a.ok} ok</b>${a.fail?` · <b style="color:var(--fail)">${a.fail} falhas</b>`:""}${a.error?` · <b style="color:var(--error)">${a.error} erros</b>`:""}${a.skip?` · ${a.skip} puladas`:""}</span>
+          <span class="sep">·</span>
+          <span><b>${fmtWhen(p.whenMs, run.addedAt)}</b></span>
+          <span class="sep">·</span>
+          <span>${fmtTime(t.time)}</span>
+          <span class="sep">·</span>
+          <span title="${esc(run.fileName)}">${esc(run.fileName)}</span>
+        </div>
+        ${rpChips ? `<div class="props" style="margin-top:8px">${rpChips}</div>` : ""}
+      </div>
+      <div class="head-right">
+        <button class="btn ghost" data-act="close" title="Fechar (Esc)" aria-label="Fechar resultado">
+          ${I.x14}<span class="hide-sm">Fechar</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="summary reveal" style="animation-delay:.04s">
+      <div class="ring-card">
+        <div class="ring" style="--rate-color:${rc}">
+          <svg width="116" height="116" viewBox="0 0 116 116">
+            <circle class="track" cx="58" cy="58" r="50" fill="none" stroke-width="9"/>
+            <circle class="prog" cx="58" cy="58" r="50" fill="none" stroke-width="9"
+                    stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${C.toFixed(1)}" data-off="${off.toFixed(1)}"/>
+          </svg>
+          <div class="val"><b style="color:${rc}">${rate}%</b><small>aprovacao</small></div>
+        </div>
+        <span class="cap">Taxa de aprovacao</span>
+      </div>
+      ${stat("Suites", t.suites, "var(--text-2)", suitesIc, "Cada <testsuite> do ProBat (um proc)")}
+      ${stat("Métodos", t.methods, "var(--text-2)", "", "Testes agrupados por metodo (@Test)")}
+      ${stat("Passou", t.passed, "var(--pass)", I.check, "Metodos que passaram")}
+      ${stat("Falhou", t.failed, "var(--fail)", I.x, "Metodos com falha")}
+      ${stat("Erros", t.error, "var(--error)", I.bang, "Metodos com erro")}
+      ${stat("Pulados", t.skipped, "var(--skip)", I.skip, "Metodos pulados")}
+      ${stat("Classes", t.classes, "var(--text-2)", clsIc, "Classes de teste (classname)")}
+      ${stat("Testes", a.total, "var(--accent)", layersIc, "Asserções: cada <testcase> individual do ProBat")}
+      ${stat("Passou", a.ok, "var(--pass)", I.check, "Asserções que passaram")}
+      ${stat("Falhou", a.fail, "var(--fail)", I.x, "Asserções com falha")}
+      ${stat("Erros", a.error, "var(--error)", I.bang, "Asserções com erro")}
+      ${stat("Pulados", a.skip, "var(--skip)", I.skip, "Asserções puladas")}
+    </div>
+
+    ${detailsHtml}
+
+    <div class="toolbar reveal" style="animation-delay:.08s">
+      <div class="chips">${chips}</div>
+      <span class="grow"></span>
+      <label class="search case-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input type="text" id="caseSearch" placeholder="Buscar suite / método / asserção" value="${esc(caseQuery)}" aria-label="Buscar suite, método ou asserção">
+      </label>
+    </div>
+
+    <div id="suites" class="reveal" style="animation-delay:.12s">
+      ${renderSuites(p)}
+    </div>
+  </div>`;
+
+  // anima o anel
+  requestAnimationFrame(() => {
+    const prog = main.querySelector(".ring .prog");
+    if(prog) prog.style.strokeDashoffset = prog.getAttribute("data-off");
+  });
+  const ci = $("#caseSearch");
+  if(ci){ ci.addEventListener("input", e => { caseQuery = e.target.value; $("#suites").innerHTML = renderSuites(p); }); }
+}
+
+function methodVisible(m, suiteName){
+  if(filter!=="all" && m.status !== filter) return false;
+  if(caseQuery){
+    const q = caseQuery.toLowerCase();
+    const inA = m.asserts.some(a => (a.desc||"").toLowerCase().includes(q) || (a.message||"").toLowerCase().includes(q));
+    const hit = m.label.toLowerCase().includes(q)
+             || (m.classname||"").toLowerCase().includes(q)
+             || (suiteName||"").toLowerCase().includes(q)
+             || inA;
+    if(!hit) return false;
+  }
+  return true;
+}
+
+function assertRow(a){
+  const st = STATUS[a.status];
+  const showCmp = a.status!=="passed" && (a.result!=="" || a.expected!=="");
+  return `
+  <div class="assert" style="--c:${st.color};--c-soft:${st.soft}">
+    <span class="a-ic" aria-hidden="true">${st.ic}</span>
+    <div class="a-body">
+      <div class="a-desc">${esc(a.desc || a.raw || "(sem descricao)")}</div>
+      ${a.status!=="passed" && a.message ? `<div class="a-msg">${a.type?`<span class="ty">${esc(a.type)}</span> · `:""}${esc(a.message)}</div>` : ""}
+      ${showCmp ? `<div class="a-cmp"><span class="got">obtido <b>${esc(a.result)}</b></span><span class="exp">esperado <b>${esc(a.expected)}</b></span></div>` : ""}
+    </div>
+    ${a.assertType?`<span class="a-tag">${esc(a.assertType)}</span>`:""}
+  </div>`;
+}
+
+function renderSuites(p){
+  let any = false;
+  const html = p.suites.map(s => {
+    const st = STATUS[s.status] || STATUS.skipped;
+    // metodos visiveis por classe
+    const visClasses = s.classes.map(c => ({ cls:c, methods:c.methods.filter(m => methodVisible(m, s.name)) }))
+                                .filter(g => g.methods.length);
+    const visCount = visClasses.reduce((n,g) => n + g.methods.length, 0);
+    const showEmpty = s.empty && filter==="all" && !caseQuery;
+    if(!visCount && !showEmpty) return "";   // suite filtrada por completo
+    any = true;
+    const sc = s.counts;
+    const isCol = collapsed.has("suite:"+s.proc);
+    const seg = (n,c) => n>0 ? `<i style="width:${(n/(sc.methods||1)*100)||0}%;background:${c}"></i>` : "";
+
+    const multiClass = visClasses.length > 1;
+    const renderMethodRow = (m) => {
+      const ms = STATUS[m.status];
+      const isOpen = openCases.has(m.id);
+      const cc = m.counts;
+      const sub = `${cc.total} assercão${cc.total>1?"es":""}${cc.fail?` · ${cc.fail} com falha`:""}`;
+      return `
+      <li class="case ${isOpen?"open":""}" style="--c:${ms.color};--c-soft:${ms.soft}">
+        <div class="case-row" data-case="${m.id}" data-clickable="1" role="button" tabindex="0" aria-expanded="${isOpen}">
+          <span class="ic" aria-hidden="true">${ms.ic}</span>
+          <span class="nm">
+            <span class="n">${esc(m.label)}</span>
+            <span class="cls">${esc(m.classname)} · ${esc(sub)}</span>
+          </span>
+          <span class="st">${ms.pt}</span>
+          <span class="tm">${m.time?fmtTime(m.time):"—"}</span>
+          <span class="chv">${I.chevron}</span>
+        </div>
+        <div class="detail"><div><div class="detail-in asserts">
+          ${m.asserts.map(assertRow).join("")}
+        </div></div></div>
+      </li>`;
+    };
+
+    let body;
+    if(showEmpty && !visCount){
+      body = `<div class="suite-empty">Suite sem testes (tests=0).</div>`;
+    } else {
+      body = visClasses.map(g => {
+        const rows = g.methods.map(renderMethodRow).join("");
+        const divider = multiClass
+          ? `<div class="cls-divider"><span class="cls-ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>${esc(g.cls.name)}<span class="cls-n">${g.methods.length} de ${g.cls.counts.methods}</span></div>`
+          : "";
+        return `<div class="cls-group">${divider}<ul class="cases">${rows}</ul></div>`;
+      }).join("");
+    }
+
+    return `
+    <section class="suite ${isCol?"collapsed":""}" data-suite="${esc(s.proc)}" style="--st-color:${st.color}">
+      <div class="suite-head" data-suite-toggle="${esc(s.proc)}">
+        <span class="chev">${I.chevron}</span>
+        <span class="sname">${esc(s.name)}</span>
+        <span class="sproc">#${esc(s.proc)}</span>
+        <span class="smeta">${sc.passed}/${sc.methods} métodos · ${sc.classes} classe${sc.classes>1?"s":""} · ${fmtTime(sc.time)}</span>
+        <span class="sbar" aria-hidden="true">${seg(sc.passed,"var(--pass)")}${seg(sc.failed,"var(--fail)")}${seg(sc.error,"var(--error)")}${seg(sc.skipped,"var(--skip)")}</span>
+        <span class="scount">${visCount} exib.</span>
+      </div>
+      ${body}
+    </section>`;
+  }).join("");
+  if(!any) return `<div class="no-cases">Nenhuma suite/método corresponde ao filtro atual.</div>`;
+  return html;
+}
+
+/* ============================ EVENTOS ============================ */
+// delegacao global de cliques
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  const runEl = t.closest("[data-id]");
+  const removeBtn = t.closest("[data-remove]");
+  if(removeBtn){ e.stopPropagation(); removeRun(removeBtn.getAttribute("data-remove")); return; }
+  if(runEl){ selectRun(runEl.getAttribute("data-id")); return; }
+
+  const filt = t.closest("[data-filter]");
+  if(filt){ filter = filt.getAttribute("data-filter"); renderMain(); return; }
+
+  const suiteTog = t.closest("[data-suite-toggle]");
+  if(suiteTog){ const n = "suite:"+suiteTog.getAttribute("data-suite-toggle"); collapsed.has(n)?collapsed.delete(n):collapsed.add(n); refreshSuites(); return; }
+
+  const caseRow = t.closest("[data-case]");
+  if(caseRow && caseRow.getAttribute("data-clickable")==="1"){
+    const id = caseRow.getAttribute("data-case");
+    openCases.has(id)?openCases.delete(id):openCases.add(id);
+    const li = caseRow.closest(".case"); li.classList.toggle("open");
+    caseRow.setAttribute("aria-expanded", li.classList.contains("open"));
+    return;
+  }
+
+  const act = t.closest("[data-act]");
+  if(act){ const a = act.getAttribute("data-act"); if(a==="pick") $("#fileInput").click(); if(a==="close") closeRun(); return; }
+});
+
+function closeRun(){
+  selectedId = null;
+  collapsed.clear(); openCases.clear();
+  filter = "all"; caseQuery = "";
+  renderAll();
+  $("#main").scrollTop = 0;
+}
+
+function refreshSuites(){
+  const run = runs.find(r=>r.id===selectedId); if(!run) return;
+  const c = $("#suites"); if(c) c.innerHTML = renderSuites(run.parsed);
+}
+
+function selectRun(id){
+  selectedId = id;
+  collapsed.clear(); openCases.clear();
+  filter = "all"; caseQuery = "";
+  document.body.classList.remove("side-open");
+  renderAll();
+  $("#main").scrollTop = 0;
+}
+
+// teclado: setas trocam execucao; Enter abre item focado
+document.addEventListener("keydown", (e) => {
+  const typing = /INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||"");
+  if(e.key==="Escape" && selectedId && !typing){ e.preventDefault(); closeRun(); return; }
+  const onRun = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains("run");
+  if((e.key==="Enter"||e.key===" ") && onRun){ e.preventDefault(); selectRun(document.activeElement.getAttribute("data-id")); return; }
+  if((e.key==="Enter"||e.key===" ") && document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute("data-clickable")==="1"){
+    e.preventDefault(); document.activeElement.click(); return;
+  }
+  if((e.key==="ArrowDown"||e.key==="ArrowUp") && runs.length && !/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||"")){
+    const ord = sortedRuns(); const idx = ord.findIndex(r=>r.id===selectedId);
+    let ni = e.key==="ArrowDown" ? idx+1 : idx-1;
+    ni = Math.max(0, Math.min(ord.length-1, ni));
+    if(ord[ni]){ e.preventDefault(); selectRun(ord[ni].id); }
+  }
+});
+
+// botoes topo
+$("#pickBtn").addEventListener("click", () => $("#fileInput").click());
+$("#clearBtn").addEventListener("click", clearAll);
+$("#fileInput").addEventListener("change", (e) => { ingestFiles(e.target.files); e.target.value=""; });
+$("#sideSearch").addEventListener("input", (e) => { sideQuery = e.target.value; renderSidebar(); });
+$("#sortKey").addEventListener("change", (e) => { sortKey = e.target.value; saveSort(); renderSidebar(); });
+$("#sortDir").addEventListener("click", () => {
+  sortDir = sortDir==="asc" ? "desc" : "asc";
+  $("#sortDir").classList.toggle("asc", sortDir==="asc");
+  $("#sortDir").title = sortDir==="asc" ? "Ordem crescente" : "Ordem decrescente";
+  saveSort(); renderSidebar();
+});
+$("#menuBtn").addEventListener("click", () => document.body.classList.toggle("side-open"));
+$("#scrim").addEventListener("click", () => document.body.classList.remove("side-open"));
+
+// drag & drop global
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if(e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")){ dragDepth++; document.body.classList.add("dragging"); } });
+window.addEventListener("dragover", (e) => { e.preventDefault(); });
+window.addEventListener("dragleave", () => { dragDepth=Math.max(0,dragDepth-1); if(!dragDepth) document.body.classList.remove("dragging"); });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth=0; document.body.classList.remove("dragging");
+  if(e.dataTransfer && e.dataTransfer.files.length) ingestFiles(e.dataTransfer.files);
+});
+
+// tema
+const sunIcon = '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>';
+const moonIcon = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme);
+  $("#themeIcon").innerHTML = theme==="dark" ? sunIcon : moonIcon;
+  try { localStorage.setItem(LS_THEME, theme); } catch(_){}
+}
+$("#themeBtn").addEventListener("click", () => {
+  applyTheme(document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark");
+});
+
+/* ---- init ---- */
+(function init(){
+  let theme = "dark";
+  try { theme = localStorage.getItem(LS_THEME) || (matchMedia("(prefers-color-scheme: light)").matches ? "light":"dark"); } catch(_){}
+  applyTheme(theme);
+  $("#appVer").textContent = "v" + VIEWER_VERSION;
+  document.title = "ProBat Viewer v" + VIEWER_VERSION + " — Resultados de testes";
+  try { const s = JSON.parse(localStorage.getItem(LS_SORT)||"null"); if(s){ sortKey = s.key||sortKey; sortDir = s.dir||sortDir; } } catch(_){}
+  $("#sortKey").value = sortKey;
+  $("#sortDir").classList.toggle("asc", sortDir==="asc");
+  $("#sortDir").title = sortDir==="asc" ? "Ordem crescente" : "Ordem decrescente";
+  load();
+  if(runs.length) selectedId = sortedRuns()[0].id;
+  renderAll();
+})();
+</script>
+<!-- self-test do parser (sem dependencia). Ative com ?selftest na URL ou window.__probatSelfTest() no console. -->
+<script>
+"use strict";
+window.__probatSelfTest = function(){
+  const F = {
+    // multi-suite: 2 suites (procs 000064/000065), mesmo custom, 1+2 testcases
+    multi: `<?xml version="1.0"?>
+<testsuites name="tlppCore_tests" tests="3" ok="2" failures="1" skipped="0" date="17/06/26" time="17:31:56">
+  <exec code="A" custom="APROV-X" time="0.25" ended="1781728305.35">
+    <inputParameters><param1>type:custom</param1><param2>APROV-X</param2></inputParameters>
+    <info_server><so>Win</so><AppServerVersion>24.3.1.5</AppServerVersion><TLPPVersion>01.06.01</TLPPVersion></info_server>
+    <iniconfiguration><DBTYPE>Local</DBTYPE><EXPORT_FORMAT>JUnit</EXPORT_FORMAT></iniconfiguration>
+  </exec>
+  <testsuite exec="A" proc="000064" custom="APROV-X" name="suite_um" tests="1" ok="1" failures="0" skipped="0" time="0.1" ended="1781728305.35">
+    <testcase classname="TEST.A.UM" name="Method:T01()" time="0"><system-out>Folder: T | Assert: OK | Result: {L}-[True] | Expected: {L}-[True] | Description: ok1</system-out></testcase>
+  </testsuite>
+  <exec code="B" custom="APROV-X" time="0.30" ended="1781728308.01"><info_server><so>Win</so></info_server></exec>
+  <testsuite exec="B" proc="000065" custom="APROV-X" name="suite_dois" tests="2" ok="1" failures="1" skipped="0" time="0.2" ended="1781728308.01">
+    <testcase classname="TEST.A.DOIS" name="Method:T02()" time="0"><system-out>Folder: T | Assert: EQUALS | Result: {C}-[1] | Expected: {C}-[1] | Description: ok2</system-out></testcase>
+    <testcase classname="TEST.A.DOIS" name="Method:T02()" time="0"><failure type="Warning" message="diff"><system-out>Folder: T | Assert: EQUALS | Result: {C}-[2] | Expected: {C}-[3] | Description: falhou</system-out></failure></testcase>
+  </testsuite>
+  <runParameters description="x"><branch>0101</branch><product>000003</product></runParameters>
+</testsuites>`,
+    // single-suite com 2 classes (como 000033.xml)
+    multiClass: `<?xml version="1.0"?>
+<testsuites name="tlppCore_tests" tests="2" ok="2" failures="0" skipped="0" date="11/06/26" time="10:01:20">
+  <exec code="C" custom="NFC-Y" time="1.0" ended="1781182877.78"><info_server><so>Win</so></info_server></exec>
+  <testsuite exec="C" proc="000033" custom="NFC-Y" name="all" tests="2" ok="2" failures="0" skipped="0" time="1.0" ended="1781182877.77">
+    <testcase classname="TEST.C.UM" name="Method:TA()" time="0"><system-out>Folder: T | Assert: TRUE | Result: {L}-[True] | Expected: {L}-[True] | Description: a</system-out></testcase>
+    <testcase classname="TEST.C.DOIS" name="Method:TB()" time="0"><system-out>Folder: T | Assert: TRUE | Result: {L}-[True] | Expected: {L}-[True] | Description: b</system-out></testcase>
+  </testsuite>
+</testsuites>`,
+    // suite vazia (tests=0)
+    empty: `<?xml version="1.0"?>
+<testsuites name="tlppCore_tests" tests="0" ok="0" failures="0" skipped="0" date="17/06/26" time="17:47:46">
+  <exec code="D" custom="APROV-Z" time="0.06" ended="1781729264.03"><info_server><so>Win</so></info_server></exec>
+  <testsuite exec="D" proc="000070" custom="APROV-Z" name="vazia" tests="0" ok="0" failures="0" skipped="0" time="0" ended="1781729264.02"></testsuite>
+</testsuites>`
+  };
+  let pass = 0, failN = 0; const log = [];
+  const eq = (label, got, exp) => {
+    const ok = JSON.stringify(got) === JSON.stringify(exp);
+    if(ok){ pass++; } else { failN++; }
+    log.push((ok?"PASS ":"FAIL ")+label+(ok?"":"  got="+JSON.stringify(got)+" exp="+JSON.stringify(exp)));
+  };
+
+  const m = parseExport(F.multi, "multi.xml");
+  eq("multi: 2 suites", m.suites.length, 2);
+  eq("multi: procs", m.suites.map(s=>s.proc), ["000064","000065"]);
+  eq("multi: names", m.suites.map(s=>s.name), ["suite_um","suite_dois"]);
+  eq("multi: key = custom", m.key, "APROV-X");
+  eq("multi: total metodos", m.totals.methods, 2);          // T01 (suite1) + T02 (suite2)
+  eq("multi: total assercoes", m.totals.asserts.total, 3);
+  eq("multi: assercoes fail", m.totals.asserts.fail, 1);
+  eq("multi: metodos passed", m.totals.passed, 1);
+  eq("multi: metodos failed", m.totals.failed, 1);
+  eq("multi: classes", m.totals.classes, 2);
+  eq("multi: env do 1o exec", m.env.AppServerVersion, "24.3.1.5");
+  eq("multi: inputParams", m.inputParams.length, 2);
+  eq("multi: runParams len", m.runParams.length, 2);
+  eq("multi: runParams branch", (m.runParams.find(x=>x.name==="branch")||{}).value, "0101");
+  eq("multi: suite2 status failed", m.suites[1].status, "failed");
+
+  const c = parseExport(F.multiClass, "mc.xml");
+  eq("multiClass: runParams vazio", c.runParams.length, 0);
+  eq("multiClass: 1 suite", c.suites.length, 1);
+  eq("multiClass: 2 classes na suite", c.suites[0].classes.length, 2);
+  eq("multiClass: classes no total", c.totals.classes, 2);
+  eq("multiClass: 2 metodos", c.totals.methods, 2);
+
+  const e = parseExport(F.empty, "e.xml");
+  eq("empty: 1 suite", e.suites.length, 1);
+  eq("empty: suite.empty=true", e.suites[0].empty, true);
+  eq("empty: 0 metodos", e.totals.methods, 0);
+  eq("empty: suite status skipped", e.suites[0].status, "skipped");
+
+  console.log("%cProBat self-test: "+pass+" PASS / "+failN+" FAIL", failN?"color:#fb6f8d":"color:#34d399");
+  log.forEach(l => console.log(l));
+  return { pass, fail: failN };
+};
+if(/[?&]selftest\b/.test(location.search)){ window.addEventListener("load", () => window.__probatSelfTest()); }
+</script>
+</body>
+</html>

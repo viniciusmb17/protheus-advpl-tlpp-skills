@@ -1,0 +1,93 @@
+#include 'tlpp-core.th'
+#include 'tlpp-probat.th'
+
+namespace test.common
+using namespace tlpp.probat
+
+@TestFixture(suite="common_stampresults")
+class test_probatStampResults
+  public method new() constructor
+  @Test('bloco normal contem chaves e wrapper')
+  public method test01_normal()
+  @Test('jParams vazio retorna string vazia')
+  public method test02_empty()
+  @Test('jParams nil retorna string vazia')
+  public method test03_nil()
+  @Test('valores com e-comercial menor maior sao escapados')
+  public method test04_escape()
+  @Test('valor vazio vira elemento vazio')
+  public method test05_emptyValue()
+  @Test('chave invalida e sanitizada')
+  public method test06_sanitizeKey()
+  @Test('injeta o bloco antes do fechamento testsuites')
+  public method test07_injectBeforeClose()
+  @Test('bloco vazio mantem o xml intacto')
+  public method test08_injectEmpty()
+endclass
+
+method new() class test_probatStampResults
+return self
+
+method test01_normal() class test_probatStampResults
+  local jP   := JsonObject():New() as json
+  local cRes := ""                 as character
+  jP['branch']  := '0101'
+  jP['product'] := '000003'
+  cRes := test.common.u_buildRunParamsXml(jP)
+  assertTrue('<runParameters' $ cRes, "deve abrir o bloco")
+  assertTrue('<branch>0101</branch>' $ cRes, "deve conter branch")
+  assertTrue('<product>000003</product>' $ cRes, "deve conter product")
+  assertTrue('</runParameters>' $ cRes, "deve fechar o bloco")
+return .T.
+
+method test02_empty() class test_probatStampResults
+  local jP   := JsonObject():New() as json
+  local cRes := ""                 as character
+  cRes := test.common.u_buildRunParamsXml(jP)
+  assertEquals(cRes, "", "sem chaves deve retornar vazio")
+return .T.
+
+method test03_nil() class test_probatStampResults
+  local cRes := "" as character
+  cRes := test.common.u_buildRunParamsXml(nil)
+  assertEquals(cRes, "", "nil deve retornar vazio")
+return .T.
+
+method test04_escape() class test_probatStampResults
+  local jP   := JsonObject():New() as json
+  local cRes := ""                 as character
+  jP['raw'] := 'a&b<c>d'
+  cRes := test.common.u_buildRunParamsXml(jP)
+  assertTrue('<raw>a&amp;b&lt;c&gt;d</raw>' $ cRes, "deve escapar e-comercial menor maior")
+return .T.
+
+method test05_emptyValue() class test_probatStampResults
+  local jP   := JsonObject():New() as json
+  local cRes := ""                 as character
+  jP['supplier'] := ''
+  cRes := test.common.u_buildRunParamsXml(jP)
+  assertTrue('<supplier></supplier>' $ cRes, "valor vazio vira elemento vazio")
+return .T.
+
+method test06_sanitizeKey() class test_probatStampResults
+  local jP   := JsonObject():New() as json
+  local cRes := ""                 as character
+  jP['1bad key'] := 'v'
+  cRes := test.common.u_buildRunParamsXml(jP)
+  assertTrue('<badkey>v</badkey>' $ cRes, "chave deve perder digito inicial e espacos")
+return .T.
+
+method test07_injectBeforeClose() class test_probatStampResults
+  local cXml := '<testsuites name="x"><testsuite/></testsuites>' as character
+  local cRes := ""                                               as character
+  cRes := test.common.u_injectRunParams(cXml, '<runParameters/>')
+  assertTrue('<runParameters/></testsuites>' $ cRes, "bloco deve ficar antes do fechamento")
+  assertTrue('<testsuite/>' $ cRes, "conteudo original preservado")
+return .T.
+
+method test08_injectEmpty() class test_probatStampResults
+  local cXml := '<testsuites></testsuites>' as character
+  local cRes := ""                          as character
+  cRes := test.common.u_injectRunParams(cXml, '')
+  assertEquals(cRes, cXml, "bloco vazio nao altera o xml")
+return .T.

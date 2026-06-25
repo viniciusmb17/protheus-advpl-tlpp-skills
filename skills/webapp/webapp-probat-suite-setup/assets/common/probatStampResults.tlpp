@@ -1,0 +1,208 @@
+#include 'tlpp-core.th'
+#include 'totvs.ch'
+
+namespace test.common
+
+// ============================================================================
+// Helper compartilhado: carimba (renomeia) o XML que o ProBat acabou de exportar
+// com um nome unico por execucao -> <cKey>_<YYYYMMDD>-<HHMMSS>.xml.
+//
+// O export do ProBat nao controla o nome do arquivo (vem do appserver.ini, sem
+// data/hora). Este helper localiza o XML recem-gravado por data de modificacao,
+// confirma pelo conteudo (custom="<cKey>") que e o run atual e renomeia. O irmao
+// _warning.xml (quando existe) recebe o mesmo carimbo.
+//
+// Chamado pelos runners logo apos tlpp.probat.export("type:custom", cKey).
+// Falha de rename apenas loga WARN; nunca derruba o run.
+// ============================================================================
+
+// vazio = rootpath. Se o .ini exportar para uma subpasta, passe cDir (com "\" no fim).
+#define STAMP_DIR_DEFAULT ""
+// limita os arquivos lidos na varredura: o export recem-gravado e sempre o mais recente,
+// entao basta checar os N mais novos (evita ler todo o rootpath no caminho sem match).
+#define STAMP_MAX_SCAN 20
+
+/*/{Protheus.doc} stampResults
+Renomeia o XML exportado pelo ProBat com timestamp, garantindo o arquivo certo pela
+tag custom (igual ao cKey do run). Procura o *.xml mais recente em cDir, confirma o
+conteudo e renomeia para <cKey>_<YYYYMMDD>-<HHMMSS>.xml (e o irmao _warning, se houver).
+A varredura ignora arquivos *_warning.xml (tratados junto com o principal). Sinal forte
+de confirmacao: a tag custom; o date/time/ended do XML corroboram a recencia.
+@type function
+@author <author>
+@since 18/06/2026
+@param cKey, character, chave do run (custom) usada para confirmar o arquivo
+@param cDir, character, diretorio de export (default rootpath; passe a subpasta com "\" se o .ini exportar para outra)
+@param jParams, json, parametros do run a gravar em <runParameters> (omitido -> so renomeia)
+@return character, novo nome do arquivo carimbado, ou "" se nada foi renomeado
+/*/
+User Function stampResults(cKey as character, cDir as character, jParams as json) as character
+    Local aFiles := {}    as array
+    Local cNew   := ""    as character
+    Local cBlock := ""    as character
+    Local lWrote := .F.    as logical
+    Local cTS    := ""    as character
+    Local cOrig  := ""    as character
+    Local cXml   := ""    as character
+    Local cStem  := ""    as character
+    Local cWarn  := ""    as character
+    Local nI     := 0     as numeric
+    Local nRead  := 0     as numeric
+    Local lFound := .F.    as logical
+
+    Default cKey    := ""
+    Default cDir    := STAMP_DIR_DEFAULT
+    Default jParams := nil
+
+    If Empty(cKey)
+        FWLogMsg("WARN", , "stampResults", FunName(), "", "0", "cKey vazio; nada a carimbar", 0, 0)
+        Return ""
+    EndIf
+
+    aFiles := Directory(cDir + "*.xml")
+    If Len(aFiles) == 0
+        FWLogMsg("WARN", , "stampResults", FunName(), "", "0", "Nenhum XML encontrado em export dir", 0, 0)
+        Return ""
+    EndIf
+
+    // mais recente primeiro (data + hora de modificacao)
+    aSort(aFiles, , , {|x, y| DToS(x[3]) + x[4] > DToS(y[3]) + y[4] })
+
+    cTS := DToS(Date()) + "-" + StrTran(Time(), ":", "")
+
+    // varre do mais novo p/ o mais antigo; carimba o 1o cujo conteudo tem custom="<cKey>"
+    For nI := 1 To Len(aFiles)
+        cOrig := aFiles[nI][1]
+        If "_warning.xml" $ Lower(cOrig)               // warning trata junto com o principal
+            Loop
+        EndIf
+        If nRead >= STAMP_MAX_SCAN                      // varre so os N mais recentes (perf)
+            Exit
+        EndIf
+        nRead++
+        cXml := MemoRead(cDir + cOrig)
+        If ('custom="' + AllTrim(cKey) + '"') $ cXml
+            cNew   := AllTrim(cKey) + "_" + cTS + ".xml"
+            cBlock := test.common.u_buildRunParamsXml(jParams)
+            lWrote := .F.
+            If !Empty(cBlock)
+                // com params: grava o XML enriquecido no nome carimbado e apaga o original
+                cXml := test.common.u_injectRunParams(cXml, cBlock)
+                If MemoWrite(cDir + cNew, cXml)
+                    FErase(cDir + cOrig)
+                    lWrote := .T.
+                Else
+                    FWLogMsg("WARN", , "stampResults", FunName(), "", "0", "Falha ao gravar XML com params: " + cOrig, 0, 0)
+                EndIf
+            EndIf
+            If !lWrote
+                // sem params (ou falha na gravacao): caminho original por rename
+                If FRename(cDir + cOrig, cDir + cNew) != 0
+                    FWLogMsg("WARN", , "stampResults", FunName(), "", "0", "Falha ao renomear " + cOrig, 0, 0)
+                    cNew := ""
+                EndIf
+            EndIf
+            If !Empty(cNew)
+                lFound := .T.
+                cStem := SubStr(cOrig, 1, Len(cOrig) - 4)   // nome sem ".xml"
+                cWarn := cStem + "_warning.xml"
+                If File(cDir + cWarn)                       // irmao _warning -> mesmo carimbo (sem params)
+                    FRename(cDir + cWarn, cDir + AllTrim(cKey) + "_" + cTS + "_warning.xml")
+                EndIf
+                FWLogMsg("INFO", , "stampResults", FunName(), "", "0", "XML carimbado: " + cNew, 0, 0)
+            EndIf
+            Exit
+        EndIf
+    Next nI
+
+    If !lFound
+        FWLogMsg("WARN", , "stampResults", FunName(), "", "0", "Nenhum XML com custom=" + AllTrim(cKey), 0, 0)
+    EndIf
+Return cNew
+
+/*/{Protheus.doc} buildRunParamsXml
+Monta o bloco XML <runParameters> a partir de um JSON de parametros do run.
+Um filho por chave; valor XML-escapado; nome de elemento sanitizado. Generico:
+qualquer runner passa o seu JSON. Vazio/nil -> "".
+@type function
+@author <author>
+@since 24/06/2026
+@param jParams, json, pares chave/valor do run (ex.: branch, product, ...)
+@return character, bloco <runParameters>...</runParameters> ou "" se vazio
+/*/
+User Function buildRunParamsXml(jParams as json) as character
+    Local cXml  := ""                       as character
+    Local cEol  := Chr(13) + Chr(10)        as character
+    Local aKeys := {}                       as array
+    Local cKey  := ""                       as character
+    Local cVal  := ""                       as character
+    Local nI    := 0                        as numeric
+
+    Default jParams := nil
+    If jParams == nil
+        Return ""
+    EndIf
+    aKeys := jParams:GetNames()
+    If Len(aKeys) == 0
+        Return ""
+    EndIf
+
+    cXml := '  <runParameters description="runner config passed to the test run">' + cEol
+    For nI := 1 To Len(aKeys)
+        cKey := sanitizeName(aKeys[nI])
+        If Empty(cKey)
+            Loop
+        EndIf
+        cVal := xmlEscape(cValToChar(jParams[aKeys[nI]]))
+        cXml += '    <' + cKey + '>' + cVal + '</' + cKey + '>' + cEol
+    Next nI
+    cXml += '  </runParameters>' + cEol
+Return cXml
+
+// sanitiza um nome de chave para nome de elemento XML valido: mantem
+// [A-Za-z0-9_] e remove digitos iniciais (nome XML nao comeca com digito).
+Static Function sanitizeName(cName as character) as character
+    Local cOut := "" as character
+    Local cCh  := "" as character
+    Local nI   := 0  as numeric
+    cName := AllTrim(cValToChar(cName))
+    For nI := 1 To Len(cName)
+        cCh := SubStr(cName, nI, 1)
+        If IsAlpha(cCh) .Or. IsDigit(cCh) .Or. cCh == "_"
+            cOut += cCh
+        EndIf
+    Next nI
+    Do While !Empty(cOut) .And. IsDigit(SubStr(cOut, 1, 1))
+        cOut := SubStr(cOut, 2)
+    EndDo
+Return cOut
+
+// escapa os 3 metacaracteres XML em texto (e-comercial primeiro).
+Static Function xmlEscape(cVal as character) as character
+    cVal := StrTran(cVal, "&", "&amp;")
+    cVal := StrTran(cVal, "<", "&lt;")
+    cVal := StrTran(cVal, ">", "&gt;")
+Return cVal
+
+/*/{Protheus.doc} injectRunParams
+Insere um bloco XML imediatamente antes do ultimo </testsuites>. Bloco vazio
+nao altera; sem </testsuites>, anexa ao fim (fallback defensivo).
+@type function
+@author <author>
+@since 24/06/2026
+@param cXml, character, conteudo do XML exportado
+@param cBlock, character, bloco a inserir
+@return character, XML com o bloco inserido
+/*/
+User Function injectRunParams(cXml as character, cBlock as character) as character
+    Local nPos := 0 as numeric
+    Default cXml   := ""
+    Default cBlock := ""
+    If Empty(cBlock)
+        Return cXml
+    EndIf
+    nPos := RAt("</testsuites>", cXml)
+    If nPos == 0
+        Return cXml + cBlock
+    EndIf
+Return SubStr(cXml, 1, nPos - 1) + cBlock + SubStr(cXml, nPos)

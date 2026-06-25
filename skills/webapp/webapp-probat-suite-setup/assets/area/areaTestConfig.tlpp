@@ -1,0 +1,52 @@
+#include 'tlpp-core.th'
+#include 'totvs.ch'
+
+namespace test.<area>
+
+// Caminho do arquivo de config (rootpath). Cross-thread: ProBat roda fixture em thread async.
+Static Function <area>TestCfgFile() as character
+Return "probat_<area>_cfg.json"
+
+// Defaults centrais (fonte unica de emp/fil).
+Static Function cfgDefault(cKey as character) as character
+    Local cDef := "" as character
+    Do Case
+        Case cKey == "emp" ; cDef := "<emp>"
+        Case cKey == "fil" ; cDef := "<fil>"
+    EndCase
+Return cDef
+
+/*/{Protheus.doc} <area>TestCfgSet
+Grava a config dos testes (JSON) no arquivo compartilhado. Chamado pelo runner.
+@type function
+@author <author>
+@since 23/06/2026
+@param jCfg, json, pares chave/valor (emp, fil, branch, product, supplier, request, suite)
+/*/
+User Function <area>TestCfgSet(jCfg as json)
+    Default jCfg := JsonObject():New()
+    MemoWrite(<area>TestCfgFile(), jCfg:toJson())
+Return
+
+/*/{Protheus.doc} <area>TestCfg
+Le um valor de config pela chave; se ausente/vazio, usa o default (cDef ou cfgDefault).
+@type function
+@author <author>
+@since 23/06/2026
+@param cKey, character, chave
+@param cDef, character, default (omitido -> cfgDefault)
+@return character, valor resolvido
+/*/
+User Function <area>TestCfg(cKey as character, cDef as character) as character
+    Local cVal := ""                 as character
+    Local cTxt := ""                 as character
+    Local jCfg := JsonObject():New() as json
+    Default cDef := cfgDefault(cKey)
+    cVal := cDef
+    cTxt := MemoRead(<area>TestCfgFile())
+    If !Empty(cTxt) .And. Empty(jCfg:fromJson(cTxt))
+        If jCfg:hasProperty(cKey) .And. ValType(jCfg[cKey]) == "C" .And. !Empty(jCfg[cKey])
+            cVal := jCfg[cKey]
+        EndIf
+    EndIf
+Return cVal
