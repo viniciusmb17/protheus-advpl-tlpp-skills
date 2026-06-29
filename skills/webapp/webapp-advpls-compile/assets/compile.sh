@@ -8,26 +8,33 @@
 #   - arquivo direto (legado): --ini aponta um .ini COMPLETO (com psw).
 # Em ambos, descobre o binario advpls na extensao TOTVS.tds-vscode mais recente.
 #
+# Opcoes:
+#   --workdir <dir>   pasta de trabalho (perfil + logs). Default: <repo>/tmp/advpls
+#   --profile <ini>   perfil .ini sem senha. Default: <workdir>/compile.profile.ini
+#   --secret <nome>   nome do segredo no Keychain/libsecret. Default: default
+#   --ini <ini>       modo legado: .ini COMPLETO com psw
+#
 # Uso:
-#   ./compile.sh                       # secret 'default' + tmp/advpls/compile.profile.ini
-#   ./compile.sh --secret mistral-demo
-#   ./compile.sh --profile /abs/x.profile.ini --secret mistral-demo
-#   ./compile.sh --ini /abs/compile.ini    # modo legado
+#   ./compile.sh
+#   ./compile.sh --secret mistral-demo --workdir "$HOME/.advpls/portal"
+#   ./compile.sh --ini /abs/compile.ini
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
-PROFILE="" ; SECRET="default" ; INI=""
+WORKDIR="" ; PROFILE="" ; SECRET="default" ; INI=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --workdir) WORKDIR="${2:-}"; shift 2 ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --secret)  SECRET="${2:-}";  shift 2 ;;
     --ini)     INI="${2:-}";     shift 2 ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "arg desconhecido: $1" >&2; exit 2 ;;
   esac
 done
+[ -n "$WORKDIR" ] || WORKDIR="$REPO_ROOT/tmp/advpls"
 
 # --- descobrir o binario advpls ---
 EXT_ROOT="$HOME/.vscode/extensions"
@@ -52,7 +59,7 @@ if [ -n "$INI" ]; then
   RUNINI="$INI"
   MODO="arquivo (.ini completo)"
 else
-  [ -n "$PROFILE" ] || PROFILE="$REPO_ROOT/tmp/advpls/compile.profile.ini"
+  [ -n "$PROFILE" ] || PROFILE="$WORKDIR/compile.profile.ini"
   [ -f "$PROFILE" ] || { echo "perfil nao encontrado: $PROFILE (copie compile.profile.ini.template)" >&2; exit 1; }
 
   case "$OS" in
@@ -69,8 +76,8 @@ else
   MODO="secret store -> .ini transiente"
 fi
 
-# log com horario: arquivo por-run em tmp/advpls/logs/compile_<ts>.log (nao sobrescreve)
-LOGDIR="$REPO_ROOT/tmp/advpls/logs"
+# log com horario: arquivo por-run em <workdir>/logs/compile_<ts>.log (nao sobrescreve)
+LOGDIR="$WORKDIR/logs"
 mkdir -p "$LOGDIR"
 RUNLOG="$LOGDIR/compile_$(date +%Y%m%d_%H%M%S).log"
 log_ts(){ printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$RUNLOG"; }

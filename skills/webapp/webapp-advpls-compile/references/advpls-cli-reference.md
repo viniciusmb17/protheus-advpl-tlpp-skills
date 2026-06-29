@@ -120,6 +120,10 @@ set-secret  (interativo, terminal do usuario)  ->  cofre cifrado do SO
 compile     ->  le do cofre  ->  .ini TRANSIENTE no temp (psw injetada)  ->  advpls cli  ->  apaga o .ini
 ```
 
+### Pasta de trabalho (WorkDir)
+
+Perfil, logs e (no Windows) o blob de senha ficam num `WorkDir`. **Perguntar ao usuario onde** antes de configurar — opcoes: `<repo>/tmp/advpls` (default, ja coberto por `tmp/`), uma pasta fixa no repo (ex.: `.advpls/`, **adicionar ao `.gitignore`**), ou fora do repo (`~/.advpls/<projeto>`, `%LOCALAPPDATA%\advpls\<projeto>`). Passar via `-WorkDir`/`--workdir`; `set-secret.ps1` aceita o mesmo. Se a pasta ficar no repo e nao estiver gitignorada, ela pode vazar blob de senha e logs — sempre garantir o `.gitignore`.
+
 ### Windows — DPAPI (sem dependencia)
 
 ```powershell

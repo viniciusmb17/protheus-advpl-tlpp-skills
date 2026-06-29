@@ -9,8 +9,11 @@
      A senha nunca e impressa nem persiste em texto puro.
    - Arquivo direto (legado): -Ini aponta um .ini COMPLETO (com psw) e roda como esta.
   Em ambos, descobre o advpls.exe na extensao TOTVS.tds-vscode mais recente.
+.PARAMETER WorkDir
+  Pasta de trabalho (perfil + blob de senha + logs). Default: <repo>/tmp/advpls.
+  Use outra pasta se nao quiser os artefatos em tmp/ (ex.: -WorkDir C:\Users\x\.advpls\portal).
 .PARAMETER Profile
-  Caminho do .ini de perfil (sem senha). Default: <repo>/tmp/advpls/compile.profile.ini
+  Caminho do .ini de perfil (sem senha). Default: <WorkDir>/compile.profile.ini
 .PARAMETER SecretName
   Nome do segredo no cofre DPAPI (ver set-secret.ps1). Default 'default'.
 .PARAMETER Ini
@@ -18,12 +21,13 @@
 .EXAMPLE
   ./compile.ps1
 .EXAMPLE
-  ./compile.ps1 -SecretName mistral-demo
+  ./compile.ps1 -SecretName mistral-demo -WorkDir C:\Users\vinic\.advpls\portal
 .EXAMPLE
   ./compile.ps1 -Ini "D:\repo\tmp\advpls\compile.ini"
 #>
 [CmdletBinding()]
 param(
+  [string]$WorkDir,
   [string]$Profile,
   [string]$SecretName = 'default',
   [string]$Ini
@@ -31,6 +35,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+if (-not $WorkDir) { $WorkDir = Join-Path $repoRoot 'tmp\advpls' }
 
 # --- descobrir o advpls.exe na extensao TDS mais recente ---
 $extRoot = Join-Path $env:USERPROFILE '.vscode\extensions'
@@ -48,12 +53,12 @@ try {
     $modo = 'arquivo (.ini completo)'
   }
   else {
-    if (-not $Profile) { $Profile = Join-Path $repoRoot 'tmp\advpls\compile.profile.ini' }
+    if (-not $Profile) { $Profile = Join-Path $WorkDir 'compile.profile.ini' }
     if (-not (Test-Path -LiteralPath $Profile)) { throw "Perfil nao encontrado: $Profile (copie compile.profile.ini.template)" }
 
-    $blob = Join-Path $repoRoot ("tmp\advpls\{0}.psw" -f $SecretName)
+    $blob = Join-Path $WorkDir ("{0}.psw" -f $SecretName)
     if (-not (Test-Path -LiteralPath $blob)) {
-      throw "Segredo '$SecretName' nao encontrado ($blob). Rode: set-secret.ps1 -SecretName $SecretName"
+      throw "Segredo '$SecretName' nao encontrado ($blob). Rode: set-secret.ps1 -SecretName $SecretName -WorkDir $WorkDir"
     }
 
     # decifrar DPAPI -> plaintext apenas em memoria
@@ -72,8 +77,8 @@ try {
     $modo = 'secret store (DPAPI) -> .ini transiente'
   }
 
-  # log com horario: arquivo por-run em tmp/advpls/logs/compile_<ts>.log (nao sobrescreve)
-  $logDir = Join-Path $repoRoot 'tmp\advpls\logs'
+  # log com horario: arquivo por-run em <WorkDir>/logs/compile_<ts>.log (nao sobrescreve)
+  $logDir = Join-Path $WorkDir 'logs'
   if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
   $runLog = Join-Path $logDir ('compile_{0:yyyyMMdd_HHmmss}.log' -f (Get-Date))
   $writeTs = {

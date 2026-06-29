@@ -27,24 +27,41 @@ Esta skill e a variante **headless/CLI** da `advpl-tlpp-compile` (que compila pe
 4. **Pre-requisitos do compilador:** acesso **exclusivo ao RPO**; fontes em **CP-1252** (UTF-8 compila com mojibake — ver skill `utf8-to-cp1252-conversion`); **chave `.aut`** somente se o fonte tiver `Function`/`Main Function` (secao `[authorization]`).
 5. **Ler o resultado antes de declarar sucesso.** Conferir `[SUCCESS] ... compiled successfully` / `All files compiled successfully` e `EXIT CODE: 0`. Exit != 0 ou ausencia de `[SUCCESS]` = falha.
 
+## Onde gravar os artefatos (perguntar SEMPRE)
+
+Os wrappers usam uma **pasta de trabalho** (`WorkDir`) que guarda: o perfil `compile.profile.ini` (sem senha), os logs por-run e — no Windows — o blob de senha cifrado `<nome>.psw`. **Antes de configurar, PERGUNTE ao usuario onde criar essa pasta.** Ofereca opcoes:
+
+| Opcao | Caminho sugerido | `.gitignore` |
+|---|---|---|
+| Efemera no repo (default) | `<repo>/tmp/advpls` | ja coberto por `tmp/` |
+| Fixa no repo | `<repo>/.advpls` (ou outro nome) | **adicionar a pasta ao `.gitignore`** |
+| Fora do repo | `~/.advpls/<projeto>` (mac/Linux) · `%LOCALAPPDATA%\advpls\<projeto>` (Windows) | nao precisa (fora do git) |
+
+**Apos o usuario aceitar uma opcao:**
+1. Se a pasta ficar **dentro do repo e ainda nao estiver coberta** pelo `.gitignore`, **adicione-a** (ex.: uma linha `.advpls/`). Para `tmp/advpls` o `tmp/` ja cobre — nao editar. Isso e obrigatorio: a pasta pode conter o blob de senha (Windows) e logs.
+2. Passe o caminho aos wrappers via `-WorkDir <dir>` (PowerShell) / `--workdir <dir>` (bash); a `set-secret.ps1` aceita o mesmo `-WorkDir`. Sem o parametro, o default e `<repo>/tmp/advpls`.
+
+Nunca grave a pasta de trabalho num local versionado sem garantir o `.gitignore`.
+
 ## Quick start (cofre do SO — recomendado)
 
-1. Copiar `assets/compile.profile.ini.template` para `tmp/advpls/compile.profile.ini` e ajustar `server`/`port`/`environment`/`user` (ver `servers.json`), `program=` (caminho ABSOLUTO dos fontes, `;` ou `,`) e `includes=`. **Sem senha** — a linha fica `psw=__PSW__`.
+0. **Escolher onde gravar** — perguntar ao usuario (secao acima). `<WorkDir>` = caminho aceito; default `<repo>/tmp/advpls`. Se a pasta for nova dentro do repo, garantir que esta no `.gitignore`.
+1. Copiar `assets/compile.profile.ini.template` para `<WorkDir>/compile.profile.ini` e ajustar `server`/`port`/`environment`/`user` (ver `servers.json`), `program=` (caminho ABSOLUTO, `;` ou `,`) e `includes=`. **Sem senha** — a linha fica `psw=__PSW__`.
 2. Guardar a senha **uma vez**, no proprio terminal (interativo):
-   - Windows: `assets/set-secret.ps1 -SecretName default`
-   - macOS/Linux: `assets/set-secret.sh default`
+   - Windows: `assets/set-secret.ps1 [-SecretName default] [-WorkDir <dir>]`
+   - macOS/Linux: `assets/set-secret.sh [default]`  (segredo vai pro Keychain/libsecret, nao depende de WorkDir)
 3. Compilar (o wrapper puxa a senha do cofre, gera um `.ini` transiente, roda, apaga):
-   - Windows: `assets/compile.ps1 [-SecretName default]`
-   - macOS/Linux: `assets/compile.sh [--secret default]`
+   - Windows: `assets/compile.ps1 [-SecretName default] [-WorkDir <dir>]`
+   - macOS/Linux: `assets/compile.sh [--secret default] [--workdir <dir>]`
 4. Conferir `EXIT CODE: 0` + `[SUCCESS]`.
 
-Os wrappers **descobrem o binario** na extensao `TOTVS.tds-vscode-*` mais recente sozinhos (sobrevivem a upgrade) e usam `tmp/advpls/compile.profile.ini` + segredo `default` por padrao.
+Os wrappers **descobrem o binario** na extensao `TOTVS.tds-vscode-*` mais recente sozinhos (sobrevivem a upgrade).
 
 **Fallback (arquivo direto):** um `.ini` COMPLETO com `psw=` (gitignorado) via `assets/compile.ini.template` -> `tmp/advpls/compile.ini`, rodando `compile.ps1 -Ini <...>` / `compile.sh --ini <...>`. Menos seguro (senha parada em disco) — preferir o cofre.
 
 ## Logs (com horario)
 
-O log nativo do `advpls` (`logToFile` do perfil) **nao** carimba hora por linha. Os wrappers geram, em cada run, um log proprio com **timestamp por linha** (`[yyyy-MM-dd HH:mm:ss] ...`) em `tmp/advpls/logs/compile_<yyyyMMdd_HHmmss>.log` — nome por-run (nao sobrescreve, mantem historico). O exit code reportado e o do `advpls` (preservado via `$LASTEXITCODE`/`${PIPESTATUS[0]}`, nao o do filtro de timestamp). `tmp/` esta no `.gitignore`, entao os logs nao vao para o git.
+O log nativo do `advpls` (`logToFile` do perfil) **nao** carimba hora por linha. Os wrappers geram, em cada run, um log proprio com **timestamp por linha** (`[yyyy-MM-dd HH:mm:ss] ...`) em `<WorkDir>/logs/compile_<yyyyMMdd_HHmmss>.log` — nome por-run (nao sobrescreve, mantem historico). O exit code reportado e o do `advpls` (preservado via `$LASTEXITCODE`/`${PIPESTATUS[0]}`, nao o do filtro de timestamp). Garanta que `<WorkDir>` esteja no `.gitignore` (para `tmp/advpls`, `tmp/` ja cobre) para os logs nao irem ao git.
 
 ## Cross-platform
 
@@ -85,7 +102,7 @@ includes=D:/Totvs/include
 
 ## Gestao da senha (cofre do SO)
 
-- **Windows — DPAPI.** `set-secret.ps1` cifra a senha com a Data Protection API (`ConvertFrom-SecureString`, escopo CurrentUser) e grava o blob em `tmp/advpls/<nome>.psw` — so este usuario/maquina decifra. Escolha proposital sobre o `SecretManagement`/`SecretStore`: o SecretStore exige uma senha de unlock que **travaria** o compile dirigido por agente (tool nao-interativa); DPAPI le sem prompt.
+- **Windows — DPAPI.** `set-secret.ps1` cifra a senha com a Data Protection API (`ConvertFrom-SecureString`, escopo CurrentUser) e grava o blob em `<WorkDir>/<nome>.psw` — so este usuario/maquina decifra. Escolha proposital sobre o `SecretManagement`/`SecretStore`: o SecretStore exige uma senha de unlock que **travaria** o compile dirigido por agente (tool nao-interativa); DPAPI le sem prompt.
 - **macOS — Keychain** (`security`); **Linux — libsecret** (`secret-tool`). `set-secret.sh` grava; `compile.sh` le em runtime.
 - Um segredo por servidor, se quiser: `set-secret.ps1 -SecretName mistral-demo` + `compile.ps1 -SecretName mistral-demo`.
 - `set-secret.*` e **interativo** — roda no terminal do usuario; um agente nao-interativo nao consegue (e esse e o ponto: a senha so passa pelas maos do usuario).
